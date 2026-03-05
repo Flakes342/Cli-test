@@ -19,7 +19,18 @@ LOGGER = logging.getLogger(__name__)
 
 
 class AgentChatApp:
-    COMMANDS = ["/help", "/clear", "/history", "/tools", "/files", "/run", "/plan", "/memory", "/exit"]
+    COMMANDS = [
+        "/help",
+        "/clear",
+        "/history",
+        "/tools",
+        "/files",
+        "/run",
+        "/plan",
+        "/reason",
+        "/memory",
+        "/exit",
+    ]
 
     def __init__(self, config: AgentConfig) -> None:
         self.config = config
@@ -57,7 +68,7 @@ class AgentChatApp:
         self.memory.add_chat("agent", prompt)
         self.ui.agent_message("Prompt generated. Paste this into ChatGPT Enterprise:\n\n" + prompt)
 
-    def _parse_response(self) -> None:
+    def _collect_model_response(self) -> ParsedResponse:
         self.ui.agent_message("Paste ChatGPT response. End with a single line containing END")
         lines = []
         while True:
@@ -73,30 +84,64 @@ class AgentChatApp:
         self.memory.add_task_summary("; ".join(parsed.plan[:3]) or "No plan")
 
         plan_text = "\n".join(f"{idx+1}. {step}" for idx, step in enumerate(parsed.plan)) or "No PLAN section parsed."
-        self.ui.agent_message(f"Plan parsed:\n{plan_text}")
+        self.ui.agent_message(f"Plan parsed:\n{plan_text}\n\nNEXT_ACTION: {parsed.next_action}")
+        return parsed
 
-    def _run_tools(self) -> None:
-        if not self.last_parsed:
-            self.ui.error("No parsed response available. Use /plan then /run.")
-            return
-        if not self.last_parsed.tools:
-            self.ui.error("No tool calls found in parsed response.")
-            return
+    def _run_tools(self, parsed: Optional[ParsedResponse] = None) -> str:
+        active = parsed or self.last_parsed
+        if not active:
+            self.ui.error("No parsed response available. Use /plan or /reason first.")
+            return ""
+        if not active.tools:
+            self.ui.tool_log("No tool calls found in parsed response.")
+            return ""
 
         with thinking(self.ui.console, "Executing tools..."):
-            results = self.executor.execute(self.last_parsed.tools)
+            results = self.executor.execute(active.tools)
 
+        rendered_results = []
         for result in results:
             self.memory.add_tool_run(result.tool, "", result.output, result.status)
+            rendered_results.append(f"[{result.tool}] ({result.status})\n{result.output}")
             if result.status == "success":
                 self.ui.tool_log(f"[tool={result.tool}]\n{result.output}")
             else:
                 self.ui.error(f"[tool={result.tool}] ERROR: {result.output}")
+        return "\n\n".join(rendered_results)
+
+    def _reasoning_loop(self) -> None:
+        if not self.last_task:
+            self.ui.error("No task found. Enter a message first.")
+            return
+
+        tool_feedback = "No tool outputs yet."
+        max_loops = max(1, self.config.max_reasoning_loops)
+        for iteration in range(1, max_loops + 1):
+            prompt = self.planner.build_reasoning_prompt(
+                task=self.last_task,
+                memory_context=self.memory.context_text(max_items=20),
+                iteration=iteration,
+                tool_feedback=tool_feedback,
+            )
+            self.memory.add_chat("agent", prompt)
+            self.ui.agent_message(
+                f"Reasoning iteration {iteration}/{max_loops}. Paste this prompt into ChatGPT Enterprise:\n\n{prompt}"
+            )
+
+            parsed = self._collect_model_response()
+            tool_feedback = self._run_tools(parsed)
+
+            if parsed.next_action == "DONE":
+                final_answer = parsed.final_answer or parsed.explanation or "Task completed."
+                self.ui.agent_message(f"✅ Final answer:\n{final_answer}")
+                return
+
+        self.ui.error(f"Reached max reasoning iterations ({max_loops}). Review /memory and continue with /reason if needed.")
 
     def _handle_command(self, command: str) -> bool:
         if command == "/help":
             self.ui.agent_message(
-                "Commands: /help, /clear, /history, /tools, /files, /run, /plan, /memory, /exit"
+                "Commands: /help, /clear, /history, /tools, /files, /run, /plan, /reason, /memory, /exit"
             )
             return False
         if command == "/clear":
@@ -121,14 +166,19 @@ class AgentChatApp:
                 self.ui.error("No task found. Enter a message first.")
             else:
                 self._generate_plan(self.last_task)
-                self._parse_response()
+                parsed = self._collect_model_response()
                 if self.config.auto_execute_tools:
-                    self._run_tools()
+                    self._run_tools(parsed)
+            return False
+        if command == "/reason":
+            self._reasoning_loop()
             return False
         if command == "/run":
             if not self.last_parsed:
-                self._parse_response()
-            self._run_tools()
+                parsed = self._collect_model_response()
+                self._run_tools(parsed)
+            else:
+                self._run_tools(self.last_parsed)
             return False
         if command == "/memory":
             self.ui.agent_message(self.memory.context_text(max_items=20) or "Memory empty")

@@ -1,4 +1,5 @@
-agent_name: AMEX-Agent
+agent_name: FraudForge
 theme: dark
 memory_enabled: true
 auto_execute_tools: false
+max_reasoning_loops: 5

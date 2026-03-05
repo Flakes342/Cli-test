@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
-from amex_ai_agent.prompts.templates import PROMPT_TEMPLATE
+from amex_ai_agent.prompts.templates import PROMPT_TEMPLATE, REASONING_LOOP_TEMPLATE
 
 
 class PromptPlanner:
@@ -36,3 +36,22 @@ class PromptPlanner:
             full_context = f"{memory_context}\n\nFILE CONTEXT:\n{file_context}"
 
         return PROMPT_TEMPLATE.format(task=task, memory=full_context.strip() or "No prior context")
+
+    def build_reasoning_prompt(
+        self,
+        task: str,
+        memory_context: str,
+        iteration: int,
+        tool_feedback: str,
+    ) -> str:
+        file_context = self._load_file_context(task)
+        full_context = memory_context
+        if file_context:
+            full_context = f"{memory_context}\n\nFILE CONTEXT:\n{file_context}"
+
+        return REASONING_LOOP_TEMPLATE.format(
+            task=task,
+            iteration=iteration,
+            memory=full_context.strip() or "No prior context",
+            tool_feedback=tool_feedback or "No tool outputs yet.",
+        )
