@@ -1,0 +1,4 @@
+agent_name: AMEX-Agent
+theme: dark
+memory_enabled: true
+auto_execute_tools: false
