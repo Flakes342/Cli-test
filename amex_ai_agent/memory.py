@@ -83,8 +83,13 @@ class MemoryStore:
         self.state = SessionMemory()
         self.save()
 
-    def context_text(self, max_items: int = 10) -> str:
-        recent = self.state.chat_history[-max_items:]
+    def context_text(self, max_items: int = 10, max_chars: int = 500) -> str:
+        excluded_roles = {"agent", "assistant_raw", "system_prompt", "prompt"}
+        filtered = [
+            item for item in self.state.chat_history
+            if item.get("role", "") not in excluded_roles
+        ]
+        recent = filtered[-max_items:]
         return "\n".join(
-            f"{item['role'].upper()}: {item['message'][:500]}" for item in recent
+            f"{item['role'].upper()}: {str(item['message'])[:max_chars]}" for item in recent
         )
