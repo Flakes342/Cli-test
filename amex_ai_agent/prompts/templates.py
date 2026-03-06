@@ -10,15 +10,16 @@ TASK:
 CONTEXT:
 {memory}
 
+LATEST TOOL OUTPUTS:
+No tool outputs yet.
+
 AVAILABLE TOOLS:
-data_prep(dataset_path)
+data_prep(dataset_path_or_instruction)
 rca_analysis(transcript_or_notes)
-case_review(case_json)
-alert_rationalization(alert_csv_path)
+case_review(case_json_or_notes)
+alert_rationalization(alert_csv_path_or_instruction)
 compute_metrics(model_scoring_csv_path)
 generate_ppt(summary_text)
-sql_query(sql_file_path)
-feature_rca(csv_path|feature_name|current_month|baseline_month)
 
 Return JSON with this schema:
 {{
@@ -64,6 +65,8 @@ ROUTING OPTIONS:
 - conversation (general chat/help/clarification, no tools)
 - evaluate (evaluate or summarize previous results/history)
 - execute (new actionable work requiring planning and optional tools)
+
+Rule: recommended_tools is advisory only. Do not emit executable tool calls in this stage.
 
 Return JSON schema:
 {{
@@ -126,16 +129,11 @@ Return JSON schema:
 
 
 REASONING_LOOP_TEMPLATE = """You are orchestrating a multi-step fraud analytics workflow with tool feedback.
+This is the only stage that may emit executable tool calls.
 Return JSON only.
 
 ORIGINAL TASK:
 {task}
-
-INTENT ANALYSIS:
-{intent_analysis}
-
-ROUTING DECISION:
-{routing_decision}
 
 ITERATION:
 {iteration}
@@ -146,9 +144,16 @@ SESSION MEMORY:
 LATEST TOOL OUTPUTS:
 {tool_feedback}
 
+Available tool names:
+- data_prep
+- rca_analysis
+- case_review
+- alert_rationalization
+- compute_metrics
+- generate_ppt
+
 Instructions:
 - Think stepwise and choose only necessary tools.
-- Use SQL + RCA + model metrics as needed for credit-card fraud analytics.
 - If more evidence is required, set next_action to CONTINUE.
 - If the task is complete, set next_action to DONE and provide final_answer.
 
