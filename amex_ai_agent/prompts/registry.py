@@ -8,19 +8,11 @@ from amex_ai_agent.prompts import templates
 
 PROMPT_FILES = {
     "plan": "plan_prompt.md",
-    "intent": "intent_prompt.md",
-    "routing": "routing_prompt.md",
-    "conversation": "conversation_prompt.md",
-    "evaluation": "evaluation_prompt.md",
     "reasoning_loop": "reasoning_loop_prompt.md",
 }
 
 FALLBACKS = {
     "plan": templates.PROMPT_TEMPLATE,
-    "intent": templates.INTENT_DISCOVERY_TEMPLATE,
-    "routing": templates.TASK_ROUTING_TEMPLATE,
-    "conversation": templates.CONVERSATION_RESPONSE_TEMPLATE,
-    "evaluation": templates.EVALUATION_RESPONSE_TEMPLATE,
     "reasoning_loop": templates.REASONING_LOOP_TEMPLATE,
 }
 

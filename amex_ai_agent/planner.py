@@ -37,51 +37,11 @@ class PromptPlanner:
         return full_context.strip() or "No prior context"
 
     def build_prompt(self, task: str, memory_context: str) -> str:
-        return get_prompt_template("plan").format(
+        return self.build_reasoning_prompt(
             task=task,
-            memory=self._build_full_context(task, memory_context),
-        )
-
-    def build_intent_prompt(self, task: str, memory_context: str) -> str:
-        return get_prompt_template("intent").format(
-            task=task,
-            memory=self._build_full_context(task, memory_context),
-        )
-
-    def build_routing_prompt(self, task: str, intent_analysis: str) -> str:
-        return get_prompt_template("routing").format(
-            task=task,
-            intent_analysis=intent_analysis.strip() or "Not available",
-        )
-
-    def build_conversation_prompt(
-        self,
-        task: str,
-        memory_context: str,
-        intent_analysis: str,
-        routing_decision: str,
-    ) -> str:
-        return get_prompt_template("conversation").format(
-            task=task,
-            intent_analysis=intent_analysis.strip() or "Not available",
-            routing_decision=routing_decision.strip() or "Not available",
-            memory=self._build_full_context(task, memory_context),
-        )
-
-    def build_evaluation_prompt(
-        self,
-        task: str,
-        memory_context: str,
-        tool_summary: str,
-        intent_analysis: str,
-        routing_decision: str,
-    ) -> str:
-        return get_prompt_template("evaluation").format(
-            task=task,
-            intent_analysis=intent_analysis.strip() or "Not available",
-            routing_decision=routing_decision.strip() or "Not available",
-            memory=self._build_full_context(task, memory_context),
-            tool_summary=tool_summary.strip() or "No prior tool runs found.",
+            memory_context=memory_context,
+            iteration=1,
+            tool_feedback="No tool outputs yet.",
         )
 
     def build_reasoning_prompt(
@@ -90,13 +50,9 @@ class PromptPlanner:
         memory_context: str,
         iteration: int,
         tool_feedback: str,
-        intent_analysis: str,
-        routing_decision: str,
     ) -> str:
         return get_prompt_template("reasoning_loop").format(
             task=task,
-            intent_analysis=intent_analysis.strip() or "Not available",
-            routing_decision=routing_decision.strip() or "Not available",
             iteration=iteration,
             memory=self._build_full_context(task, memory_context),
             tool_feedback=tool_feedback or "No tool outputs yet.",
