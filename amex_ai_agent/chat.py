@@ -5,10 +5,6 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-try:
-    import pyperclip
-except Exception:  # noqa: BLE001
-    pyperclip = None
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import WordCompleter
 
@@ -37,7 +33,6 @@ class AgentChatApp:
         "/plan",
         "/reason",
         "/memory",
-        "/copy",
         "/prompts",
         "/exit",
     ]
@@ -100,7 +95,6 @@ class AgentChatApp:
         with thinking(self.ui.console):
             prompt = self.planner.build_prompt(task=task, memory_context=self.memory.context_text())
         self.memory.add_chat("agent", prompt)
-        self.ui.set_copyable_message(prompt)
         self.ui.agent_message("Prompt generated. Paste this into ChatGPT Enterprise:\n\n" + prompt)
 
     def _collect_model_response(self) -> ParsedResponse:
@@ -126,7 +120,6 @@ class AgentChatApp:
 
         plan_text = "\n".join(f"{idx+1}. {step}" for idx, step in enumerate(parsed.plan)) or "No PLAN section parsed."
         summary = f"Plan parsed:\n{plan_text}\n\nNEXT_ACTION: {parsed.next_action}"
-        self.ui.set_copyable_message(summary)
         self.ui.agent_message(summary)
         return parsed
 
@@ -192,89 +185,10 @@ class AgentChatApp:
             "3) python agent.py"
         )
 
-    def _latest_copy_payload(self) -> str:
-        if self.ui.last_copyable_message.strip():
-            return self.ui.last_copyable_message
-
-        # Prefer final assistant answers stored in memory over UI status panels like graph traces.
-        for item in reversed(self.memory.state.chat_history):
-            if item.get("role") == "assistant" and str(item.get("message", "")).strip():
-                return str(item.get("message", ""))
-
-        if self.last_parsed:
-            if self.last_parsed.final_answer.strip():
-                return self.last_parsed.final_answer
-            if self.last_parsed.explanation.strip():
-                return self.last_parsed.explanation
-
-        return self.ui.last_agent_message
-
-    def _copy_latest_output(self) -> None:
-        payload = self._latest_copy_payload().strip()
-        if not payload:
-            self.ui.error("No agent output available to copy yet.")
-            return
-        if pyperclip is None:
-            self.ui.error("Clipboard dependency not available. Install pyperclip in the conda env.")
-            return
-        try:
-            pyperclip.copy(payload)
-            self.ui.copied_notice()
-        except Exception as exc:  # noqa: BLE001
-            self.ui.error(
-                "Clipboard copy failed. If running over SSH/remote shell, clipboard may be unavailable. "
-                f"Details: {exc}"
-            )
-
-    def _preflight_checks(self) -> dict[str, dict[str, str]]:
-        packages: dict[str, str] = {}
-        for label, module_name in self.REQUIRED_PACKAGES.items():
-            try:
-                importlib.import_module(module_name)
-                packages[label] = "ok"
-            except Exception as exc:  # noqa: BLE001
-                packages[label] = f"missing: {exc}"
-
-        tools = self.executor.validate_registry()
-        return {"packages": packages, "tools": tools}
-
-    def _show_preflight_warnings(self) -> None:
-        checks = self._preflight_checks()
-        missing = [f"{name} ({status})" for name, status in checks["packages"].items() if status != "ok"]
-        broken_tools = [f"{name} ({status})" for name, status in checks["tools"].items() if status != "ok"]
-
-        if not missing and not broken_tools:
-            return
-
-        if missing:
-            self.ui.error("Environment warning: missing packages -> " + ", ".join(missing))
-        if broken_tools:
-            self.ui.error("Tool registry warning: " + ", ".join(broken_tools))
-
-        self.ui.agent_message(
-            "Setup hint:\n"
-            "1) mamba env create -f environment.yml\n"
-            "2) mamba activate amex-ai-agent\n"
-            "3) python agent.py"
-        )
-
-    def _copy_latest_output(self) -> None:
-        if not self.ui.last_agent_message.strip():
-            self.ui.error("No agent output available to copy yet.")
-            return
-        if pyperclip is None:
-            self.ui.error("Clipboard dependency not available. Install pyperclip in the conda env.")
-            return
-        try:
-            pyperclip.copy(self.ui.last_agent_message)
-            self.ui.copied_notice()
-        except Exception as exc:  # noqa: BLE001
-            self.ui.error(f"Clipboard copy failed: {exc}")
-
     def _handle_command(self, command: str) -> bool:
         if command == "/help":
             self.ui.agent_message(
-                "Commands: /help, /clear, /history, /tools, /doctor, /files, /run, /plan, /reason, /memory, /copy, /prompts, /exit"
+                "Commands: /help, /clear, /history, /tools, /doctor, /files, /run, /plan, /reason, /memory, /prompts, /exit"
             )
             return False
         if command == "/clear":
@@ -323,9 +237,6 @@ class AgentChatApp:
             return False
         if command == "/memory":
             self.ui.agent_message(self.memory.context_text(max_items=20) or "Memory empty")
-            return False
-        if command == "/copy":
-            self._copy_latest_output()
             return False
         if command == "/prompts":
             self.ui.agent_message(
