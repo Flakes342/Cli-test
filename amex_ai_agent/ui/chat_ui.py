@@ -8,19 +8,21 @@ from rich.text import Text
 
 
 LOGO = r"""
-███████╗██████╗  █████╗ ██╗   ██╗██████╗
-██╔════╝██╔══██╗██╔══██╗██║   ██║██╔══██╗
-█████╗  ██████╔╝███████║██║   ██║██████╔╝
-██╔══╝  ██╔══██╗██╔══██║██║   ██║██╔══██╗
-██║     ██║  ██║██║  ██║╚██████╔╝██║  ██║
-╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝
+███████╗ █████╗ ██╗     ██╗     ██╗   ██╗
+██╔════╝██╔══██╗██║     ██║     ╚██╗ ██╔╝
+███████╗███████║██║     ██║      ╚████╔╝
+╚════██║██╔══██║██║     ██║       ╚██╔╝
+███████║██║  ██║███████╗███████╗   ██║
+╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝   ╚═╝
 
- ███████╗ ██████╗ ██████╗  ██████╗ ███████╗
- ██╔════╝██╔═══██╗██╔══██╗██╔════╝ ██╔════╝
- █████╗  ██║   ██║██████╔╝██║  ███╗█████╗
- ██╔══╝  ██║   ██║██╔══██╗██║   ██║██╔══╝
- ██║     ╚██████╔╝██║  ██║╚██████╔╝███████╗
- ╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝
+            :@@@=            %@     +@:
+           @#                %@@% -@@@:
+         %@                  %@@@@@@@@:
+         %@         @@@@@+   %@ .@* +@:
+         %@       #@@@@@@+ *@@@@% -@@@@@
+         %@@#     #@@@ :@@@-    .@*
+            :@@@= #@@@@# +@@@@@@% -@=
+                  #@@@@@@+ *@@@@@@* +@:
 """
 
 
@@ -33,8 +35,8 @@ class ChatUI:
         self.tools = list(tools)
 
     def render_header(self) -> None:
-        self.console.print(Panel.fit("✶ Welcome to FraudForge CLI", border_style="bright_red"))
-        self.console.print(Text(LOGO, style="bold #e07a5f"))
+        self.console.print(Panel.fit("✶ Welcome to Sally's CLI", border_style="bright_red"))
+        self.console.print(Text(LOGO, style="bold #E07A5F"))
 
         details = (
             f"[bold white]{self.agent_name}[/bold white]\n"
@@ -48,7 +50,7 @@ class ChatUI:
         self.console.print(Text(f"You > {message}", style="green"))
 
     def agent_message(self, message: str) -> None:
-        self.console.print(Panel(message, title="Agent", border_style="bright_cyan"))
+        self.console.print(Panel(message, title="Sally", border_style="bright_cyan"))
 
     def tool_log(self, message: str) -> None:
         self.console.print(Panel(message, title="Tool Output", border_style="yellow"))
