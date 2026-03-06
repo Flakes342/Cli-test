@@ -27,15 +27,20 @@ class ManualPasteGateway:
 
     def invoke(self, prompt: str, label: str) -> str:
         self.ui.agent_message(
-            f"[{label}] Paste this prompt into ChatGPT Enterprise.\nThen paste model output here and finish with a single line: END\n(Use /exit to quit app if needed).\n\n{prompt}"
+            f"[{label}] Paste this prompt into ChatGPT Enterprise.\n"
+            "Then paste model output here and finish with a single line: END\n"
+            "Tip: multi-line paste is supported.\n"
+            "(Use /exit to quit app if needed).\n\n"
+            f"{prompt}"
         )
         lines: list[str] = []
         while True:
-            line = self.session.prompt("")
-            if line.strip() == "END":
-                break
-            lines.append(line)
-        return "\n".join(lines)
+            chunk = self.session.prompt("")
+            parts = chunk.splitlines() or [chunk]
+            for part in parts:
+                if part.strip() == "END":
+                    return "\n".join(lines)
+                lines.append(part)
 
 
 @dataclass

@@ -90,10 +90,16 @@ class AgentChatApp:
         self.ui.agent_message("Paste ChatGPT response. End with a single line containing END")
         lines = []
         while True:
-            line = self.session.prompt("")
-            if line.strip() == "END":
+            chunk = self.session.prompt("")
+            parts = chunk.splitlines() or [chunk]
+            stop = False
+            for part in parts:
+                if part.strip() == "END":
+                    stop = True
+                    break
+                lines.append(part)
+            if stop:
                 break
-            lines.append(line)
         response_text = "\n".join(lines)
 
         parsed = self.parser.parse(response_text)
