@@ -9,9 +9,11 @@ from prompt_toolkit.completion import WordCompleter
 
 from amex_ai_agent.config import AgentConfig
 from amex_ai_agent.executor import ToolExecutor
+from amex_ai_agent.llm_gateway import ApiGateway, ManualPasteGateway
 from amex_ai_agent.memory import MemoryStore
 from amex_ai_agent.parser import ParsedResponse, ResponseParser
 from amex_ai_agent.planner import PromptPlanner
+from amex_ai_agent.reasoning_graph import FraudReasoningGraph
 from amex_ai_agent.ui.chat_ui import ChatUI
 from amex_ai_agent.ui.spinner import thinking
 
@@ -19,7 +21,18 @@ LOGGER = logging.getLogger(__name__)
 
 
 class AgentChatApp:
-    COMMANDS = ["/help", "/clear", "/history", "/tools", "/files", "/run", "/plan", "/memory", "/exit"]
+    COMMANDS = [
+        "/help",
+        "/clear",
+        "/history",
+        "/tools",
+        "/files",
+        "/run",
+        "/plan",
+        "/reason",
+        "/memory",
+        "/exit",
+    ]
 
     def __init__(self, config: AgentConfig) -> None:
         self.config = config
@@ -30,8 +43,24 @@ class AgentChatApp:
         self.ui = ChatUI(config.agent_name, self.executor.list_tools())
         self.last_task: Optional[str] = None
         self.last_parsed: Optional[ParsedResponse] = None
+
         words = self.COMMANDS + self.executor.list_tools()
         self.session = PromptSession(completer=WordCompleter(words, ignore_case=True))
+
+        if self.config.llm_mode.lower() == "api":
+            self.llm = ApiGateway(model_name=self.config.llm_model)
+        else:
+            self.llm = ManualPasteGateway(session=self.session, ui=self.ui)
+
+        self.graph = FraudReasoningGraph(
+            config=self.config,
+            planner=self.planner,
+            parser=self.parser,
+            executor=self.executor,
+            memory=self.memory,
+            llm=self.llm,
+            ui=self.ui,
+        )
 
     def start(self) -> None:
         self.ui.render_header()
@@ -49,7 +78,7 @@ class AgentChatApp:
             self.last_task = raw
             self.memory.add_chat("user", raw)
             self.ui.user_message(raw)
-            self._generate_plan(raw)
+            self._reasoning_graph()
 
     def _generate_plan(self, task: str) -> None:
         with thinking(self.ui.console):
@@ -57,7 +86,7 @@ class AgentChatApp:
         self.memory.add_chat("agent", prompt)
         self.ui.agent_message("Prompt generated. Paste this into ChatGPT Enterprise:\n\n" + prompt)
 
-    def _parse_response(self) -> None:
+    def _collect_model_response(self) -> ParsedResponse:
         self.ui.agent_message("Paste ChatGPT response. End with a single line containing END")
         lines = []
         while True:
@@ -73,30 +102,44 @@ class AgentChatApp:
         self.memory.add_task_summary("; ".join(parsed.plan[:3]) or "No plan")
 
         plan_text = "\n".join(f"{idx+1}. {step}" for idx, step in enumerate(parsed.plan)) or "No PLAN section parsed."
-        self.ui.agent_message(f"Plan parsed:\n{plan_text}")
+        self.ui.agent_message(f"Plan parsed:\n{plan_text}\n\nNEXT_ACTION: {parsed.next_action}")
+        return parsed
 
-    def _run_tools(self) -> None:
-        if not self.last_parsed:
-            self.ui.error("No parsed response available. Use /plan then /run.")
-            return
-        if not self.last_parsed.tools:
-            self.ui.error("No tool calls found in parsed response.")
-            return
+    def _run_tools(self, parsed: Optional[ParsedResponse] = None) -> str:
+        active = parsed or self.last_parsed
+        if not active:
+            self.ui.error("No parsed response available. Use /plan or /reason first.")
+            return ""
+        if not active.tools:
+            self.ui.tool_log("No tool calls found in parsed response.")
+            return ""
 
         with thinking(self.ui.console, "Executing tools..."):
-            results = self.executor.execute(self.last_parsed.tools)
+            results = self.executor.execute(active.tools)
 
+        rendered_results = []
         for result in results:
             self.memory.add_tool_run(result.tool, "", result.output, result.status)
+            rendered_results.append(f"[{result.tool}] ({result.status})\n{result.output}")
             if result.status == "success":
                 self.ui.tool_log(f"[tool={result.tool}]\n{result.output}")
             else:
                 self.ui.error(f"[tool={result.tool}] ERROR: {result.output}")
+        return "\n\n".join(rendered_results)
+
+    def _reasoning_graph(self) -> None:
+        if not self.last_task:
+            self.ui.error("No task found. Enter a message first.")
+            return
+
+        self.ui.agent_message("Running routed graph flow...")
+        state = self.graph.run(self.last_task)
+        self.ui.agent_message(f"Graph trace: {' -> '.join(state.trace)}")
 
     def _handle_command(self, command: str) -> bool:
         if command == "/help":
             self.ui.agent_message(
-                "Commands: /help, /clear, /history, /tools, /files, /run, /plan, /memory, /exit"
+                "Commands: /help, /clear, /history, /tools, /files, /run, /plan, /reason, /memory, /exit"
             )
             return False
         if command == "/clear":
@@ -121,14 +164,19 @@ class AgentChatApp:
                 self.ui.error("No task found. Enter a message first.")
             else:
                 self._generate_plan(self.last_task)
-                self._parse_response()
+                parsed = self._collect_model_response()
                 if self.config.auto_execute_tools:
-                    self._run_tools()
+                    self._run_tools(parsed)
+            return False
+        if command == "/reason":
+            self._reasoning_graph()
             return False
         if command == "/run":
             if not self.last_parsed:
-                self._parse_response()
-            self._run_tools()
+                parsed = self._collect_model_response()
+                self._run_tools(parsed)
+            else:
+                self._run_tools(self.last_parsed)
             return False
         if command == "/memory":
             self.ui.agent_message(self.memory.context_text(max_items=20) or "Memory empty")
