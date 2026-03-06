@@ -3,9 +3,6 @@
 A local-first reasoning assistant for fraud data scientists in restricted AMEX-like environments.
 No model API is required today: prompts are generated in CLI, pasted into ChatGPT Enterprise, and responses are pasted back for routing/planning/tool execution.
 
-A local-first reasoning assistant for fraud data scientists in restricted AMEX-like environments.
-No model API is required: prompts are generated in CLI, pasted into ChatGPT Enterprise, and the response is pasted back for tool execution + iterative reasoning.
-
 ## Quick start with Mamba
 
 ```bash
@@ -64,6 +61,13 @@ llm_model: <enterprise-model-name>
 ```
 
 No orchestration-node logic needs to change.
+
+
+## Interaction behavior
+
+- Typing a normal message now runs the routed reasoning graph by default (`/reason` behavior).
+- `/plan` remains available for explicit one-shot prompt generation.
+- Memory context excludes stored prompt payloads to prevent recursive prompt growth.
 
 ## Commands
 

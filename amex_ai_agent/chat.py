@@ -78,7 +78,7 @@ class AgentChatApp:
             self.last_task = raw
             self.memory.add_chat("user", raw)
             self.ui.user_message(raw)
-            self._generate_plan(raw)
+            self._reasoning_graph()
 
     def _generate_plan(self, task: str) -> None:
         with thinking(self.ui.console):

@@ -110,6 +110,7 @@ class FraudReasoningGraph:
         response = self.llm.invoke(prompt, label="conversation-response")
         self.memory.add_chat("assistant_raw", f"[conversation-response]\n{response}")
         state.final_answer = response.strip() or "No response generated."
+        self.memory.add_chat("assistant", state.final_answer)
         self.ui.agent_message(f"✅ Final answer:\n{state.final_answer}")
         return "done"
 
@@ -125,6 +126,7 @@ class FraudReasoningGraph:
         response = self.llm.invoke(prompt, label="evaluation-response")
         self.memory.add_chat("assistant_raw", f"[evaluation-response]\n{response}")
         state.final_answer = response.strip() or "No evaluation generated."
+        self.memory.add_chat("assistant", state.final_answer)
         self.ui.agent_message(f"✅ Final answer:\n{state.final_answer}")
         return "done"
 
@@ -151,6 +153,7 @@ class FraudReasoningGraph:
 
         if parsed.next_action == "DONE":
             state.final_answer = parsed.final_answer or parsed.explanation or "Task completed."
+            self.memory.add_chat("assistant", state.final_answer)
             self.ui.agent_message(f"✅ Final answer:\n{state.final_answer}")
             return "done"
 
