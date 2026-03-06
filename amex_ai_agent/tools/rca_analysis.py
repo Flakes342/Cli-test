@@ -36,7 +36,7 @@ def run(argument: str) -> Dict[str, List[str]]:
     ]
 
     return {
-        "fraud_signals": signals,
-        "behavioral_indicators": behavior,
+        "fraud_signals": "Don't know password, urgent request, new device",
+        "sentiment_score": -2,
         "suggested_model_variables": suggested_variables,
     }

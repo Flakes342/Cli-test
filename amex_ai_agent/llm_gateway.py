@@ -54,5 +54,5 @@ class ApiGateway:
 
     def invoke(self, prompt: str, label: str) -> str:
         raise NotImplementedError(
-            "API gateway is not configured yet. Use llm_mode: manual for copy/paste mode."
+            "API gateway is not configured yet since we ain't got no API. Use llm_mode: manual for copy/paste mode."
         )

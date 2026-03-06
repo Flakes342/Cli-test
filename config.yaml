@@ -1,4 +1,4 @@
-agent_name: FraudForge
+agent_name: SallyCat
 theme: dark
 memory_enabled: true
 auto_execute_tools: false

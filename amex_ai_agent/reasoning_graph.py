@@ -30,7 +30,7 @@ class GraphState:
 
 
 class FraudReasoningGraph:
-    """LangGraph-style node/edge orchestration with swappable LLM gateway."""
+    """LangGraph style node/edge orchestration with swappable LLM gateway."""
 
     def __init__(
         self,
@@ -124,7 +124,7 @@ class FraudReasoningGraph:
         convo = self.parser.parse_conversation(response)
         state.final_answer = convo.message.strip() or "No response generated."
         self.memory.add_chat("assistant", state.final_answer)
-        self.ui.agent_message(f"✅ Final answer:\n{state.final_answer}")
+        self.ui.agent_message(f"\n{state.final_answer}")
         return "done"
 
     def _evaluate_node(self, state: GraphState) -> str:
@@ -148,7 +148,7 @@ class FraudReasoningGraph:
             if part
         ).strip() or "No evaluation generated."
         self.memory.add_chat("assistant", state.final_answer)
-        self.ui.agent_message(f"✅ Final answer:\n{state.final_answer}")
+        self.ui.agent_message(f"\n{state.final_answer}")
         return "done"
 
     def _plan_node(self, state: GraphState) -> str:
@@ -175,7 +175,7 @@ class FraudReasoningGraph:
         if parsed.next_action == "DONE":
             state.final_answer = parsed.final_answer or parsed.explanation or "Task completed."
             self.memory.add_chat("assistant", state.final_answer)
-            self.ui.agent_message(f"✅ Final answer:\n{state.final_answer}")
+            self.ui.agent_message(f"\n{state.final_answer}")
             return "done"
 
         if state.iteration >= max(1, self.config.max_reasoning_loops):
