@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import importlib
 import logging
 from pathlib import Path
 from typing import Optional
 
+try:
+    import pyperclip
+except Exception:  # noqa: BLE001
+    pyperclip = None
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import WordCompleter
 
@@ -26,13 +31,22 @@ class AgentChatApp:
         "/clear",
         "/history",
         "/tools",
+        "/doctor",
         "/files",
         "/run",
         "/plan",
         "/reason",
         "/memory",
+        "/copy",
         "/exit",
     ]
+
+    REQUIRED_PACKAGES = {
+        "pandas": "pandas",
+        "numpy": "numpy",
+        "scikit-learn": "sklearn",
+        "python-pptx": "pptx",
+    }
 
     def __init__(self, config: AgentConfig) -> None:
         self.config = config
@@ -65,6 +79,7 @@ class AgentChatApp:
     def start(self) -> None:
         self.ui.render_header()
         self.ui.agent_message("Type /help to view commands.")
+        self._show_preflight_warnings()
 
         while True:
             raw = self.session.prompt("\nYou > ").strip()
@@ -138,14 +153,59 @@ class AgentChatApp:
             self.ui.error("No task found. Enter a message first.")
             return
 
-        self.ui.agent_message("Running routed graph flow...")
+        self.ui.agent_message("Running reasoning graph flow...")
         state = self.graph.run(self.last_task)
         self.ui.agent_message(f"Graph trace: {' -> '.join(state.trace)}")
+
+    def _preflight_checks(self) -> dict[str, dict[str, str]]:
+        packages: dict[str, str] = {}
+        for label, module_name in self.REQUIRED_PACKAGES.items():
+            try:
+                importlib.import_module(module_name)
+                packages[label] = "ok"
+            except Exception as exc:  # noqa: BLE001
+                packages[label] = f"missing: {exc}"
+
+        tools = self.executor.validate_registry()
+        return {"packages": packages, "tools": tools}
+
+    def _show_preflight_warnings(self) -> None:
+        checks = self._preflight_checks()
+        missing = [f"{name} ({status})" for name, status in checks["packages"].items() if status != "ok"]
+        broken_tools = [f"{name} ({status})" for name, status in checks["tools"].items() if status != "ok"]
+
+        if not missing and not broken_tools:
+            return
+
+        if missing:
+            self.ui.error("Environment warning: missing packages -> " + ", ".join(missing))
+        if broken_tools:
+            self.ui.error("Tool registry warning: " + ", ".join(broken_tools))
+
+        self.ui.agent_message(
+            "Setup hint:\n"
+            "1) mamba env create -f environment.yml\n"
+            "2) mamba activate amex-ai-agent\n"
+            "3) python agent.py"
+        )
+
+    def _copy_latest_output(self) -> None:
+        if not self.ui.last_agent_message.strip():
+            self.ui.error("No agent output available to copy yet.")
+            return
+        if pyperclip is None:
+            self.ui.error("Clipboard dependency not available. Install pyperclip in the conda env.")
+            return
+        try:
+            pyperclip.copy(self.ui.last_agent_message)
+            self.ui.copied_notice()
+        except Exception as exc:  # noqa: BLE001
+            self.ui.error(f"Clipboard copy failed: {exc}")
 
     def _handle_command(self, command: str) -> bool:
         if command == "/help":
             self.ui.agent_message(
-                "Commands: /help, /clear, /history, /tools, /files, /run, /plan, /reason, /memory, /exit"
+                "Commands: /help, /clear, /history, /tools, /doctor, /files, /run, /plan, /reason, /memory, /copy, /exit"
             )
             return False
         if command == "/clear":
@@ -160,6 +220,14 @@ class AgentChatApp:
             return False
         if command == "/tools":
             self.ui.agent_message("Available tools: " + ", ".join(self.executor.list_tools()))
+            return False
+        if command == "/doctor":
+            checks = self._preflight_checks()
+            lines = ["Package checks:"]
+            lines.extend(f"- {name}: {status}" for name, status in checks["packages"].items())
+            lines.append("\nTool registry checks:")
+            lines.extend(f"- {name}: {status}" for name, status in checks["tools"].items())
+            self.ui.agent_message("\n".join(lines))
             return False
         if command == "/files":
             files = [str(path) for path in Path('.').iterdir() if path.is_file()]
@@ -186,6 +254,9 @@ class AgentChatApp:
             return False
         if command == "/memory":
             self.ui.agent_message(self.memory.context_text(max_items=20) or "Memory empty")
+            return False
+        if command == "/copy":
+            self._copy_latest_output()
             return False
         if command == "/exit":
             self.ui.agent_message("Goodbye.")

@@ -37,9 +37,11 @@ class PromptPlanner:
         return full_context.strip() or "No prior context"
 
     def build_prompt(self, task: str, memory_context: str) -> str:
-        return get_prompt_template("plan").format(
+        return self.build_reasoning_prompt(
             task=task,
-            memory=self._build_full_context(task, memory_context),
+            memory_context=memory_context,
+            iteration=1,
+            tool_feedback="No tool outputs yet.",
         )
 
     def build_intent_prompt(self, task: str, memory_context: str) -> str:
@@ -90,13 +92,9 @@ class PromptPlanner:
         memory_context: str,
         iteration: int,
         tool_feedback: str,
-        intent_analysis: str,
-        routing_decision: str,
     ) -> str:
         return get_prompt_template("reasoning_loop").format(
             task=task,
-            intent_analysis=intent_analysis.strip() or "Not available",
-            routing_decision=routing_decision.strip() or "Not available",
             iteration=iteration,
             memory=self._build_full_context(task, memory_context),
             tool_feedback=tool_feedback or "No tool outputs yet.",
