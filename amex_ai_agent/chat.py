@@ -9,9 +9,11 @@ from prompt_toolkit.completion import WordCompleter
 
 from amex_ai_agent.config import AgentConfig
 from amex_ai_agent.executor import ToolExecutor
+from amex_ai_agent.llm_gateway import ApiGateway, ManualPasteGateway
 from amex_ai_agent.memory import MemoryStore
 from amex_ai_agent.parser import ParsedResponse, ResponseParser
 from amex_ai_agent.planner import PromptPlanner
+from amex_ai_agent.reasoning_graph import FraudReasoningGraph
 from amex_ai_agent.ui.chat_ui import ChatUI
 from amex_ai_agent.ui.spinner import thinking
 
@@ -41,8 +43,24 @@ class AgentChatApp:
         self.ui = ChatUI(config.agent_name, self.executor.list_tools())
         self.last_task: Optional[str] = None
         self.last_parsed: Optional[ParsedResponse] = None
+
         words = self.COMMANDS + self.executor.list_tools()
         self.session = PromptSession(completer=WordCompleter(words, ignore_case=True))
+
+        if self.config.llm_mode.lower() == "api":
+            self.llm = ApiGateway(model_name=self.config.llm_model)
+        else:
+            self.llm = ManualPasteGateway(session=self.session, ui=self.ui)
+
+        self.graph = FraudReasoningGraph(
+            config=self.config,
+            planner=self.planner,
+            parser=self.parser,
+            executor=self.executor,
+            memory=self.memory,
+            llm=self.llm,
+            ui=self.ui,
+        )
 
     def start(self) -> None:
         self.ui.render_header()
@@ -109,34 +127,14 @@ class AgentChatApp:
                 self.ui.error(f"[tool={result.tool}] ERROR: {result.output}")
         return "\n\n".join(rendered_results)
 
-    def _reasoning_loop(self) -> None:
+    def _reasoning_graph(self) -> None:
         if not self.last_task:
             self.ui.error("No task found. Enter a message first.")
             return
 
-        tool_feedback = "No tool outputs yet."
-        max_loops = max(1, self.config.max_reasoning_loops)
-        for iteration in range(1, max_loops + 1):
-            prompt = self.planner.build_reasoning_prompt(
-                task=self.last_task,
-                memory_context=self.memory.context_text(max_items=20),
-                iteration=iteration,
-                tool_feedback=tool_feedback,
-            )
-            self.memory.add_chat("agent", prompt)
-            self.ui.agent_message(
-                f"Reasoning iteration {iteration}/{max_loops}. Paste this prompt into ChatGPT Enterprise:\n\n{prompt}"
-            )
-
-            parsed = self._collect_model_response()
-            tool_feedback = self._run_tools(parsed)
-
-            if parsed.next_action == "DONE":
-                final_answer = parsed.final_answer or parsed.explanation or "Task completed."
-                self.ui.agent_message(f"✅ Final answer:\n{final_answer}")
-                return
-
-        self.ui.error(f"Reached max reasoning iterations ({max_loops}). Review /memory and continue with /reason if needed.")
+        with thinking(self.ui.console, "Running graph..."):
+            state = self.graph.run(self.last_task)
+        self.ui.agent_message(f"Graph trace: {' -> '.join(state.trace)}")
 
     def _handle_command(self, command: str) -> bool:
         if command == "/help":
@@ -171,7 +169,7 @@ class AgentChatApp:
                     self._run_tools(parsed)
             return False
         if command == "/reason":
-            self._reasoning_loop()
+            self._reasoning_graph()
             return False
         if command == "/run":
             if not self.last_parsed:

@@ -14,6 +14,8 @@ class AgentConfig:
     memory_enabled: bool = True
     auto_execute_tools: bool = False
     max_reasoning_loops: int = 5
+    llm_mode: str = "manual"
+    llm_model: str = ""
 
 
 class ConfigLoader:
@@ -58,4 +60,6 @@ class ConfigLoader:
             memory_enabled=self._as_bool(data.get("memory_enabled", "true"), True),
             auto_execute_tools=self._as_bool(data.get("auto_execute_tools", "false"), False),
             max_reasoning_loops=self._as_int(data.get("max_reasoning_loops", "5"), 5),
+            llm_mode=data.get("llm_mode", "manual") or "manual",
+            llm_model=data.get("llm_model", "") or "",
         )

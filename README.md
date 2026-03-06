@@ -1,4 +1,7 @@
-# AMEX AI Agent (Human-in-the-loop CLI)
+# FraudForge (Human-in-the-loop CLI)
+
+A local-first reasoning assistant for fraud data scientists in restricted AMEX-like environments.
+No model API is required today: prompts are generated in CLI, pasted into ChatGPT Enterprise, and responses are pasted back for routing/planning/tool execution.
 
 A local-first reasoning assistant for fraud data scientists in restricted AMEX-like environments.
 No model API is required: prompts are generated in CLI, pasted into ChatGPT Enterprise, and the response is pasted back for tool execution + iterative reasoning.
@@ -33,18 +36,39 @@ print("All required packages imported successfully.")
 PY
 ```
 
-## Key workflow
+## Graph-based reasoning architecture (LangGraph-ready)
 
-1. Enter a task in plain language (example: "RCA for spike in October fraud score for feature velocity_1h").
-2. CLI generates a strict prompt.
-3. Paste prompt into ChatGPT Enterprise.
-4. Paste model response back (finish input with a single `END` line).
-5. Agent parses plan/tool calls, executes local tools, and can continue iterative reasoning via `/reason`.
+The `/reason` command now runs a node/edge orchestration layer in `amex_ai_agent/reasoning_graph.py`:
+
+1. `intent` node — understand user intent and constraints
+2. `route` node — classify request as `conversation`, `evaluate`, or `execute`
+3. route-specific branch:
+   - `conversation` -> direct response using memory
+   - `evaluate` -> evaluate prior outputs/history
+   - `execute` -> planning loop with tools (`plan <-> tools`) until DONE/max loops
+
+This keeps flow fully structured even in copy/paste mode.
+
+## Single swap point for API migration
+
+All model calls pass through one interface in `amex_ai_agent/llm_gateway.py`:
+
+- `ManualPasteGateway` (current)
+- `ApiGateway` (future direct API)
+
+When API access is available, replace/implement `ApiGateway.invoke(...)` and set:
+
+```yaml
+llm_mode: api
+llm_model: <enterprise-model-name>
+```
+
+No orchestration-node logic needs to change.
 
 ## Commands
 
 - `/plan` Generate one-shot plan prompt and parse model response
-- `/reason` Run multi-step reasoning loop (CONTINUE/DONE protocol)
+- `/reason` Run graph-based staged flow (intent, routing, route branch, tool loop)
 - `/run` Execute tool calls from latest parsed response
 - `/tools` Show available tools
 - `/memory` Show recent memory context
@@ -66,5 +90,5 @@ PY
 ## Notes
 
 - Designed for restricted enterprise environments where LLM API access is unavailable.
-- The CLI includes a polished retro terminal-style interface for a friendlier analyst experience.
-- Later migration to API-based LLM calls can reuse the same parser + tool execution architecture.
+- UI is retro terminal-style for lightweight CLI usability.
+- Data-prep and domain tool internals can be expanded independently without changing graph orchestration.

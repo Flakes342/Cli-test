@@ -42,10 +42,98 @@ FINAL_ANSWER:
 """
 
 
+INTENT_DISCOVERY_TEMPLATE = """You are a fraud analytics copilot.
+First understand what the user is truly asking before planning tools.
+
+USER TASK:
+{task}
+
+SESSION CONTEXT:
+{memory}
+
+Return STRICT format:
+INTENT_SUMMARY:
+SUCCESS_CRITERIA:
+CONSTRAINTS:
+"""
+
+
+TASK_ROUTING_TEMPLATE = """Route the task to the right execution path.
+
+USER TASK:
+{task}
+
+INTENT ANALYSIS:
+{intent_analysis}
+
+ROUTING OPTIONS:
+- conversation (general chat/help/clarification, no tools)
+- evaluate (evaluate or summarize previous results/history)
+- execute (new actionable work requiring planning and optional tools)
+
+Return STRICT format:
+TASK_TYPE:
+RECOMMENDED_TOOLS:
+RISKS_OR_GAPS:
+"""
+
+
+CONVERSATION_RESPONSE_TEMPLATE = """You are a concise enterprise fraud assistant.
+The user intent is conversational; provide a direct helpful response.
+
+USER TASK:
+{task}
+
+INTENT ANALYSIS:
+{intent_analysis}
+
+ROUTING DECISION:
+{routing_decision}
+
+SESSION CONTEXT:
+{memory}
+
+Return plain text answer only.
+"""
+
+LATEST TOOL OUTPUTS:
+{tool_feedback}
+
+EVALUATION_RESPONSE_TEMPLATE = """You are evaluating previous fraud-analysis outcomes.
+Use history and prior tool outputs to answer precisely.
+
+USER TASK:
+{task}
+
+INTENT ANALYSIS:
+{intent_analysis}
+
+ROUTING DECISION:
+{routing_decision}
+
+SESSION CONTEXT:
+{memory}
+
+RECENT TOOL OUTPUT SUMMARY:
+{tool_summary}
+
+Return plain text answer with:
+1) finding summary
+2) confidence/limitations
+3) recommended next step
+"""
+
+
 REASONING_LOOP_TEMPLATE = """You are orchestrating a multi-step fraud analytics workflow with tool feedback.
 
 ORIGINAL TASK:
 {task}
+
+INTENT ANALYSIS:
+{intent_analysis}
+
+ROUTING DECISION:
+{routing_decision}
 
 ITERATION:
 {iteration}
