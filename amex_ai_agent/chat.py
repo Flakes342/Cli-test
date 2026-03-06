@@ -132,8 +132,8 @@ class AgentChatApp:
             self.ui.error("No task found. Enter a message first.")
             return
 
-        with thinking(self.ui.console, "Running graph..."):
-            state = self.graph.run(self.last_task)
+        self.ui.agent_message("Running routed graph flow...")
+        state = self.graph.run(self.last_task)
         self.ui.agent_message(f"Graph trace: {' -> '.join(state.trace)}")
 
     def _handle_command(self, command: str) -> bool:

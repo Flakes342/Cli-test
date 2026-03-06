@@ -44,16 +44,16 @@ class ChatUI:
             "[bold]Mode[/bold]: Interactive HITL (ChatGPT Enterprise copy/paste)\n"
             f"[bold]Tools[/bold]: {', '.join(self.tools)}"
         )
-        self.console.print(Panel(details, border_style="cyan"))
+        self.console.print(Panel(Text.from_markup(details), border_style="cyan"))
 
     def user_message(self, message: str) -> None:
         self.console.print(Text(f"You > {message}", style="green"))
 
     def agent_message(self, message: str) -> None:
-        self.console.print(Panel(message, title="Sally", border_style="bright_cyan"))
+        self.console.print(Panel(Text(message), title=self.agent_name, border_style="bright_cyan"))
 
     def tool_log(self, message: str) -> None:
-        self.console.print(Panel(message, title="Tool Output", border_style="yellow"))
+        self.console.print(Panel(Text(message), title="Tool Output", border_style="yellow"))
 
     def error(self, message: str) -> None:
         self.console.print(Text(message, style="red"))

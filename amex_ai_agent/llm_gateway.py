@@ -27,7 +27,7 @@ class ManualPasteGateway:
 
     def invoke(self, prompt: str, label: str) -> str:
         self.ui.agent_message(
-            f"[{label}] Paste this prompt into ChatGPT Enterprise and paste response back. End with END.\n\n{prompt}"
+            f"[{label}] Paste this prompt into ChatGPT Enterprise.\nThen paste model output here and finish with a single line: END\n(Use /exit to quit app if needed).\n\n{prompt}"
         )
         lines: list[str] = []
         while True:
