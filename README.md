@@ -2,6 +2,7 @@
 
 A local-first reasoning assistant for fraud data scientists in restricted AMEX-like environments.
 No model API is required today: prompts are generated in CLI, pasted into ChatGPT Enterprise, and responses are pasted back for routing/planning/tool execution.
+All LLM stages are JSON-contract driven for reliable parsing.
 
 ## Quick start with Mamba
 
@@ -96,3 +97,30 @@ No orchestration-node logic needs to change.
 - Designed for restricted enterprise environments where LLM API access is unavailable.
 - UI is retro terminal-style for lightweight CLI usability.
 - Data-prep and domain tool internals can be expanded independently without changing graph orchestration.
+
+
+## JSON contracts
+
+Every LLM call now requests JSON-only output:
+
+- intent node -> `intent_summary`, `success_criteria`, `constraints`
+- routing node -> `task_type`, `recommended_tools`, `risks_or_gaps`
+- conversation/evaluation nodes -> structured response payloads
+- planning node -> `plan`, `tools`, `next_action`, `final_answer`
+
+This mirrors a LangGraph-style typed state approach and makes future API-mode execution deterministic.
+
+
+## Prompt files (Markdown per node)
+
+Prompt contracts are now separated into task-specific `.md` files under `amex_ai_agent/prompts/`:
+
+- `intent_prompt.md`
+- `routing_prompt.md`
+- `conversation_prompt.md`
+- `evaluation_prompt.md`
+- `reasoning_loop_prompt.md`
+- `plan_prompt.md`
+
+`PromptPlanner` loads them via `amex_ai_agent.prompts.registry.get_prompt_template(...)`.
+This keeps the LangGraph-style node prompts editable without changing Python orchestration code.

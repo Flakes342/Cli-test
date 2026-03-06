@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import re
-from typing import Dict, List
+from typing import List
 
 from amex_ai_agent.config import AgentConfig
 from amex_ai_agent.executor import ToolExecutor
 from amex_ai_agent.llm_gateway import LLMGateway
 from amex_ai_agent.memory import MemoryStore
-from amex_ai_agent.parser import ParsedResponse, ResponseParser
+from amex_ai_agent.parser import (
+    ParsedResponse,
+    ResponseParser,
+)
 from amex_ai_agent.planner import PromptPlanner
 from amex_ai_agent.ui.chat_ui import ChatUI
 
@@ -16,8 +18,8 @@ from amex_ai_agent.ui.chat_ui import ChatUI
 @dataclass
 class GraphState:
     task: str
-    intent_analysis: str = ""
-    routing_decision: str = ""
+    intent_analysis: str = "{}"
+    routing_decision: str = "{}"
     route: str = "execute"
     iteration: int = 0
     tool_feedback: str = "No tool outputs yet."
@@ -82,7 +84,12 @@ class FraudReasoningGraph:
         self.memory.add_chat("agent", prompt)
         response = self.llm.invoke(prompt, label="intent-discovery")
         self.memory.add_chat("assistant_raw", f"[intent-discovery]\n{response}")
-        state.intent_analysis = response
+        intent = self.parser.parse_intent(response)
+        state.intent_analysis = self._json_compact({
+            "intent_summary": intent.intent_summary,
+            "success_criteria": intent.success_criteria,
+            "constraints": intent.constraints,
+        })
         return "route"
 
     def _route_node(self, state: GraphState) -> str:
@@ -91,8 +98,13 @@ class FraudReasoningGraph:
         response = self.llm.invoke(prompt, label="task-routing")
         self.memory.add_chat("assistant_raw", f"[task-routing]\n{response}")
 
-        state.routing_decision = response
-        state.route = self._extract_route(response)
+        routing = self.parser.parse_routing(response)
+        state.routing_decision = self._json_compact({
+            "task_type": routing.task_type,
+            "recommended_tools": routing.recommended_tools,
+            "risks_or_gaps": routing.risks_or_gaps,
+        })
+        state.route = self._normalize_route(routing.task_type)
         if state.route == "conversation":
             return "conversation"
         if state.route == "evaluate":
@@ -109,7 +121,8 @@ class FraudReasoningGraph:
         self.memory.add_chat("agent", prompt)
         response = self.llm.invoke(prompt, label="conversation-response")
         self.memory.add_chat("assistant_raw", f"[conversation-response]\n{response}")
-        state.final_answer = response.strip() or "No response generated."
+        convo = self.parser.parse_conversation(response)
+        state.final_answer = convo.message.strip() or "No response generated."
         self.memory.add_chat("assistant", state.final_answer)
         self.ui.agent_message(f"✅ Final answer:\n{state.final_answer}")
         return "done"
@@ -125,7 +138,15 @@ class FraudReasoningGraph:
         self.memory.add_chat("agent", prompt)
         response = self.llm.invoke(prompt, label="evaluation-response")
         self.memory.add_chat("assistant_raw", f"[evaluation-response]\n{response}")
-        state.final_answer = response.strip() or "No evaluation generated."
+        eval_result = self.parser.parse_evaluation(response)
+        state.final_answer = "\n".join(
+            part for part in [
+                eval_result.finding_summary,
+                f"Limitations: {eval_result.confidence_and_limitations}" if eval_result.confidence_and_limitations else "",
+                f"Next step: {eval_result.recommended_next_step}" if eval_result.recommended_next_step else "",
+            ]
+            if part
+        ).strip() or "No evaluation generated."
         self.memory.add_chat("assistant", state.final_answer)
         self.ui.agent_message(f"✅ Final answer:\n{state.final_answer}")
         return "done"
@@ -187,14 +208,19 @@ class FraudReasoningGraph:
         return "plan"
 
     @staticmethod
-    def _extract_route(routing_text: str) -> str:
-        match = re.search(r"TASK_TYPE\s*:\s*([a-zA-Z_\-]+)", routing_text, flags=re.IGNORECASE)
-        value = (match.group(1) if match else "execute").strip().lower().replace("-", "_")
+    def _normalize_route(task_type: str) -> str:
+        value = (task_type or "execute").strip().lower().replace("-", "_")
         if value in {"conversation", "chat", "normal_conversation"}:
             return "conversation"
         if value in {"evaluate", "evaluation", "result_evaluation", "review_results"}:
             return "evaluate"
         return "execute"
+
+    @staticmethod
+    def _json_compact(payload: dict) -> str:
+        import json
+
+        return json.dumps(payload, separators=(",", ":"))
 
     def _recent_tool_summary(self, limit: int = 8) -> str:
         rows = self.memory.state.tool_runs[-limit:]

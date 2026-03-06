@@ -3,14 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
-from amex_ai_agent.prompts.templates import (
-    CONVERSATION_RESPONSE_TEMPLATE,
-    EVALUATION_RESPONSE_TEMPLATE,
-    INTENT_DISCOVERY_TEMPLATE,
-    PROMPT_TEMPLATE,
-    REASONING_LOOP_TEMPLATE,
-    TASK_ROUTING_TEMPLATE,
-)
+from amex_ai_agent.prompts.registry import get_prompt_template
 
 
 class PromptPlanner:
@@ -44,16 +37,22 @@ class PromptPlanner:
         return full_context.strip() or "No prior context"
 
     def build_prompt(self, task: str, memory_context: str) -> str:
-        return PROMPT_TEMPLATE.format(task=task, memory=self._build_full_context(task, memory_context))
+        return get_prompt_template("plan").format(
+            task=task,
+            memory=self._build_full_context(task, memory_context),
+        )
 
     def build_intent_prompt(self, task: str, memory_context: str) -> str:
-        return INTENT_DISCOVERY_TEMPLATE.format(
+        return get_prompt_template("intent").format(
             task=task,
             memory=self._build_full_context(task, memory_context),
         )
 
     def build_routing_prompt(self, task: str, intent_analysis: str) -> str:
-        return TASK_ROUTING_TEMPLATE.format(task=task, intent_analysis=intent_analysis.strip() or "Not available")
+        return get_prompt_template("routing").format(
+            task=task,
+            intent_analysis=intent_analysis.strip() or "Not available",
+        )
 
     def build_conversation_prompt(
         self,
@@ -62,7 +61,7 @@ class PromptPlanner:
         intent_analysis: str,
         routing_decision: str,
     ) -> str:
-        return CONVERSATION_RESPONSE_TEMPLATE.format(
+        return get_prompt_template("conversation").format(
             task=task,
             intent_analysis=intent_analysis.strip() or "Not available",
             routing_decision=routing_decision.strip() or "Not available",
@@ -77,7 +76,7 @@ class PromptPlanner:
         intent_analysis: str,
         routing_decision: str,
     ) -> str:
-        return EVALUATION_RESPONSE_TEMPLATE.format(
+        return get_prompt_template("evaluation").format(
             task=task,
             intent_analysis=intent_analysis.strip() or "Not available",
             routing_decision=routing_decision.strip() or "Not available",
@@ -94,7 +93,7 @@ class PromptPlanner:
         intent_analysis: str,
         routing_decision: str,
     ) -> str:
-        return REASONING_LOOP_TEMPLATE.format(
+        return get_prompt_template("reasoning_loop").format(
             task=task,
             intent_analysis=intent_analysis.strip() or "Not available",
             routing_decision=routing_decision.strip() or "Not available",

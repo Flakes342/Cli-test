@@ -2,6 +2,7 @@ from __future__ import annotations
 
 PROMPT_TEMPLATE = """You are an enterprise AI assistant helping a fraud analyst in a restricted environment.
 You cannot call tools directly. A local CLI agent will execute tools for you.
+Return JSON only (no markdown, no prose outside JSON).
 
 TASK:
 {task}
@@ -19,31 +20,21 @@ generate_ppt(summary_text)
 sql_query(sql_file_path)
 feature_rca(csv_path|feature_name|current_month|baseline_month)
 
-Return STRICT format:
-
-PLAN:
-1.
-2.
-
-TOOLS:
-- tool_name(argument)
-
-CODE:
-(optional; keep blank if not needed)
-
-EXPLANATION:
-(clear summary for the analyst)
-
-NEXT_ACTION:
-CONTINUE or DONE
-
-FINAL_ANSWER:
-(only fill when NEXT_ACTION is DONE)
+Return JSON with this schema:
+{{
+  "plan": ["step 1", "step 2"],
+  "tools": [{{"name": "tool_name", "argument": "raw argument string"}}],
+  "code": "optional code or empty string",
+  "explanation": "concise analyst explanation",
+  "next_action": "CONTINUE or DONE",
+  "final_answer": "required only when next_action is DONE"
+}}
 """
 
 
 INTENT_DISCOVERY_TEMPLATE = """You are a fraud analytics copilot.
-First understand what the user is truly asking before planning tools.
+First understand what the user is asking before planning tools.
+Return JSON only.
 
 USER TASK:
 {task}
@@ -51,14 +42,17 @@ USER TASK:
 SESSION CONTEXT:
 {memory}
 
-Return STRICT format:
-INTENT_SUMMARY:
-SUCCESS_CRITERIA:
-CONSTRAINTS:
+Return JSON schema:
+{{
+  "intent_summary": "...",
+  "success_criteria": ["..."],
+  "constraints": ["..."]
+}}
 """
 
 
 TASK_ROUTING_TEMPLATE = """Route the task to the right execution path.
+Return JSON only.
 
 USER TASK:
 {task}
@@ -71,15 +65,18 @@ ROUTING OPTIONS:
 - evaluate (evaluate or summarize previous results/history)
 - execute (new actionable work requiring planning and optional tools)
 
-Return STRICT format:
-TASK_TYPE:
-RECOMMENDED_TOOLS:
-RISKS_OR_GAPS:
+Return JSON schema:
+{{
+  "task_type": "conversation|evaluate|execute",
+  "recommended_tools": ["tool_name"],
+  "risks_or_gaps": ["..."]
+}}
 """
 
 
 CONVERSATION_RESPONSE_TEMPLATE = """You are a concise enterprise fraud assistant.
 The user intent is conversational; provide a direct helpful response.
+Return JSON only.
 
 USER TASK:
 {task}
@@ -93,14 +90,16 @@ ROUTING DECISION:
 SESSION CONTEXT:
 {memory}
 
-Return plain text answer only.
+Return JSON schema:
+{{
+  "message": "final user-facing response"
+}}
 """
 
-LATEST TOOL OUTPUTS:
-{tool_feedback}
 
 EVALUATION_RESPONSE_TEMPLATE = """You are evaluating previous fraud-analysis outcomes.
 Use history and prior tool outputs to answer precisely.
+Return JSON only.
 
 USER TASK:
 {task}
@@ -117,14 +116,17 @@ SESSION CONTEXT:
 RECENT TOOL OUTPUT SUMMARY:
 {tool_summary}
 
-Return plain text answer with:
-1) finding summary
-2) confidence/limitations
-3) recommended next step
+Return JSON schema:
+{{
+  "finding_summary": "...",
+  "confidence_and_limitations": "...",
+  "recommended_next_step": "..."
+}}
 """
 
 
 REASONING_LOOP_TEMPLATE = """You are orchestrating a multi-step fraud analytics workflow with tool feedback.
+Return JSON only.
 
 ORIGINAL TASK:
 {task}
@@ -147,25 +149,16 @@ LATEST TOOL OUTPUTS:
 Instructions:
 - Think stepwise and choose only necessary tools.
 - Use SQL + RCA + model metrics as needed for credit-card fraud analytics.
-- If more evidence is required, set NEXT_ACTION to CONTINUE.
-- If the task is complete, set NEXT_ACTION to DONE and provide FINAL_ANSWER.
+- If more evidence is required, set next_action to CONTINUE.
+- If the task is complete, set next_action to DONE and provide final_answer.
 
-Return STRICT format:
-
-PLAN:
-1.
-2.
-
-TOOLS:
-- tool_name(argument)
-
-CODE:
-(optional)
-
-EXPLANATION:
-
-NEXT_ACTION:
-CONTINUE or DONE
-
-FINAL_ANSWER:
+Return JSON schema:
+{{
+  "plan": ["step 1", "step 2"],
+  "tools": [{{"name": "tool_name", "argument": "raw argument string"}}],
+  "code": "optional code or empty string",
+  "explanation": "what was learned this iteration",
+  "next_action": "CONTINUE or DONE",
+  "final_answer": "required when next_action is DONE"
+}}
 """
