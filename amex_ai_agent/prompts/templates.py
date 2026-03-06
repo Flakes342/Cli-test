@@ -96,6 +96,8 @@ SESSION CONTEXT:
 Return plain text answer only.
 """
 
+LATEST TOOL OUTPUTS:
+{tool_feedback}
 
 EVALUATION_RESPONSE_TEMPLATE = """You are evaluating previous fraud-analysis outcomes.
 Use history and prior tool outputs to answer precisely.
