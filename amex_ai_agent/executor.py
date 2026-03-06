@@ -29,6 +29,7 @@ class ToolExecutor:
         "compute_metrics": "amex_ai_agent.tools.metrics",
         "generate_ppt": "amex_ai_agent.tools.ppt_generator",
         "sql_query": "amex_ai_agent.tools.sql_query",
+        "feature_rca": "amex_ai_agent.tools.feature_rca",
     }
 
     def list_tools(self) -> List[str]:
