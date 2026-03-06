@@ -41,7 +41,6 @@ class ChatUI:
         self.agent_name = agent_name
         self.tools = list(tools)
         self.last_agent_message: str = ""
-        self.last_copyable_message: str = ""
 
     def render_header(self) -> None:
         self.console.print(Panel.fit("✶ Welcome to Sally's CLI", border_style="bright_red"))
@@ -60,15 +59,10 @@ class ChatUI:
 
     def agent_message(self, message: str) -> None:
         self.last_agent_message = message
-        panel_text = f"{message}\n\n[📋 /copy]"
-        self.console.print(Panel(Text(panel_text), title=self.agent_name, border_style="bright_cyan"))
+        self.console.print(Panel(Text(message), title=self.agent_name, border_style="bright_cyan"))
 
     def tool_log(self, message: str) -> None:
         self.console.print(Panel(Text(message), title="Tool Output", border_style="yellow"))
-
-
-    def set_copyable_message(self, message: str) -> None:
-        self.last_copyable_message = message
 
     def copied_notice(self) -> None:
         self.console.print(Text("📋 Copied latest agent output to clipboard.", style="bright_green"))

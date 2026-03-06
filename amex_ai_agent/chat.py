@@ -226,6 +226,51 @@ class AgentChatApp:
                 f"Details: {exc}"
             )
 
+    def _preflight_checks(self) -> dict[str, dict[str, str]]:
+        packages: dict[str, str] = {}
+        for label, module_name in self.REQUIRED_PACKAGES.items():
+            try:
+                importlib.import_module(module_name)
+                packages[label] = "ok"
+            except Exception as exc:  # noqa: BLE001
+                packages[label] = f"missing: {exc}"
+
+        tools = self.executor.validate_registry()
+        return {"packages": packages, "tools": tools}
+
+    def _show_preflight_warnings(self) -> None:
+        checks = self._preflight_checks()
+        missing = [f"{name} ({status})" for name, status in checks["packages"].items() if status != "ok"]
+        broken_tools = [f"{name} ({status})" for name, status in checks["tools"].items() if status != "ok"]
+
+        if not missing and not broken_tools:
+            return
+
+        if missing:
+            self.ui.error("Environment warning: missing packages -> " + ", ".join(missing))
+        if broken_tools:
+            self.ui.error("Tool registry warning: " + ", ".join(broken_tools))
+
+        self.ui.agent_message(
+            "Setup hint:\n"
+            "1) mamba env create -f environment.yml\n"
+            "2) mamba activate amex-ai-agent\n"
+            "3) python agent.py"
+        )
+
+    def _copy_latest_output(self) -> None:
+        if not self.ui.last_agent_message.strip():
+            self.ui.error("No agent output available to copy yet.")
+            return
+        if pyperclip is None:
+            self.ui.error("Clipboard dependency not available. Install pyperclip in the conda env.")
+            return
+        try:
+            pyperclip.copy(self.ui.last_agent_message)
+            self.ui.copied_notice()
+        except Exception as exc:  # noqa: BLE001
+            self.ui.error(f"Clipboard copy failed: {exc}")
+
     def _handle_command(self, command: str) -> bool:
         if command == "/help":
             self.ui.agent_message(
