@@ -37,7 +37,7 @@ PY
 
 ## Graph-based reasoning architecture (simplified)
 
-The `/reason` command runs a simplified node/edge loop in `amex_ai_agent/reasoning_graph.py`:
+The `/reason` command runs a simplified node/edge loop in `amex_ai_agent/reasoning_graph.py` and uses the `reasoning_loop` prompt contract for iterative planning:
 
 1. `plan` node — generate iterative plan + optional tool calls
 2. `tools` node — execute parsed tool calls and capture outputs
@@ -64,6 +64,7 @@ No orchestration-node logic needs to change.
 ## Interaction behavior
 
 - Typing a normal message runs the planning/tool loop by default (`/reason` behavior).
+- Runtime no longer prints graph-trace panels in normal output.
 - `/plan` remains available and uses the same planning contract.
 - Memory context excludes stored prompt payloads to prevent recursive prompt growth.
 - Startup preflight warns if packages/tools are missing.
@@ -75,7 +76,8 @@ No orchestration-node logic needs to change.
 - `/run` Execute tool calls from latest parsed response
 - `/tools` Show available tools
 - `/doctor` Validate package and tool-module readiness
-- `/copy` Copy latest agent output to clipboard
+- `/copy` Copy latest copyable agent output (shown in UI as `[📋 /copy]`)
+- `/prompts` Show which prompt contracts are active vs reserved
 - `/memory` Show recent memory context
 - `/history` Show recent chat history
 - `/clear` Reset memory
@@ -111,3 +113,8 @@ This keeps parsing deterministic in copy/paste mode and future API mode.
 
 Prompt contracts are stored in `.md` files under `amex_ai_agent/prompts/` and loaded via
 `amex_ai_agent.prompts.registry.get_prompt_template(...)`.
+
+Current runtime behavior:
+- Normal chat + `/reason` use `reasoning_loop_prompt.md` (iterative planning/tool execution).
+- `/plan` uses the same planning contract via planner aliasing.
+- Non-runtime prompt variants are moved under `amex_ai_agent/prompts/experimental/` to keep the active tree clean.

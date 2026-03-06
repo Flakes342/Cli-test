@@ -87,6 +87,7 @@ class FraudReasoningGraph:
         if parsed.next_action == "DONE":
             state.final_answer = parsed.final_answer or parsed.explanation or "Task completed."
             self.memory.add_chat("assistant", state.final_answer)
+            self.ui.set_copyable_message(state.final_answer)
             self.ui.agent_message(f"\n{state.final_answer}")
             return "done"
 
@@ -95,6 +96,7 @@ class FraudReasoningGraph:
                 f"Reached max reasoning iterations ({self.config.max_reasoning_loops}). "
                 "Review /memory and run /reason again if needed."
             )
+            self.ui.set_copyable_message(state.final_answer)
             self.ui.error(state.final_answer)
             return "done"
 
