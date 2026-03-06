@@ -3,6 +3,9 @@
 A local-first reasoning assistant for fraud data scientists in restricted AMEX-like environments.
 No model API is required today: prompts are generated in CLI, pasted into ChatGPT Enterprise, and responses are pasted back for routing/planning/tool execution.
 
+A local-first reasoning assistant for fraud data scientists in restricted AMEX-like environments.
+No model API is required: prompts are generated in CLI, pasted into ChatGPT Enterprise, and the response is pasted back for tool execution + iterative reasoning.
+
 ## Quick start with Mamba
 
 ```bash
