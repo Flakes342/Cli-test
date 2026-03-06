@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import importlib
 import logging
 from pathlib import Path
 from typing import Optional
 
+try:
+    import pyperclip
+except Exception:  # noqa: BLE001
+    pyperclip = None
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import WordCompleter
 
@@ -26,13 +31,23 @@ class AgentChatApp:
         "/clear",
         "/history",
         "/tools",
+        "/doctor",
         "/files",
         "/run",
         "/plan",
         "/reason",
         "/memory",
+        "/copy",
+        "/prompts",
         "/exit",
     ]
+
+    REQUIRED_PACKAGES = {
+        "pandas": "pandas",
+        "numpy": "numpy",
+        "scikit-learn": "sklearn",
+        "python-pptx": "pptx",
+    }
 
     def __init__(self, config: AgentConfig) -> None:
         self.config = config
@@ -65,6 +80,7 @@ class AgentChatApp:
     def start(self) -> None:
         self.ui.render_header()
         self.ui.agent_message("Type /help to view commands.")
+        self._show_preflight_warnings()
 
         while True:
             raw = self.session.prompt("\nYou > ").strip()
@@ -84,6 +100,7 @@ class AgentChatApp:
         with thinking(self.ui.console):
             prompt = self.planner.build_prompt(task=task, memory_context=self.memory.context_text())
         self.memory.add_chat("agent", prompt)
+        self._set_copyable_message(prompt)
         self.ui.agent_message("Prompt generated. Paste this into ChatGPT Enterprise:\n\n" + prompt)
 
     def _collect_model_response(self) -> ParsedResponse:
@@ -108,7 +125,9 @@ class AgentChatApp:
         self.memory.add_task_summary("; ".join(parsed.plan[:3]) or "No plan")
 
         plan_text = "\n".join(f"{idx+1}. {step}" for idx, step in enumerate(parsed.plan)) or "No PLAN section parsed."
-        self.ui.agent_message(f"Plan parsed:\n{plan_text}\n\nNEXT_ACTION: {parsed.next_action}")
+        summary = f"Plan parsed:\n{plan_text}\n\nNEXT_ACTION: {parsed.next_action}"
+        self._set_copyable_message(summary)
+        self.ui.agent_message(summary)
         return parsed
 
     def _run_tools(self, parsed: Optional[ParsedResponse] = None) -> str:
@@ -138,14 +157,85 @@ class AgentChatApp:
             self.ui.error("No task found. Enter a message first.")
             return
 
-        self.ui.agent_message("Running routed graph flow...")
-        state = self.graph.run(self.last_task)
-        self.ui.agent_message(f"Graph trace: {' -> '.join(state.trace)}")
+        self.ui.agent_message("Running reasoning flow...")
+        self.graph.run(self.last_task)
+
+    def _preflight_checks(self) -> dict[str, dict[str, str]]:
+        packages: dict[str, str] = {}
+        for label, module_name in self.REQUIRED_PACKAGES.items():
+            try:
+                importlib.import_module(module_name)
+                packages[label] = "ok"
+            except Exception as exc:  # noqa: BLE001
+                packages[label] = f"missing: {exc}"
+
+        tools = self.executor.validate_registry()
+        return {"packages": packages, "tools": tools}
+
+    def _show_preflight_warnings(self) -> None:
+        checks = self._preflight_checks()
+        missing = [f"{name} ({status})" for name, status in checks["packages"].items() if status != "ok"]
+        broken_tools = [f"{name} ({status})" for name, status in checks["tools"].items() if status != "ok"]
+
+        if not missing and not broken_tools:
+            return
+
+        if missing:
+            self.ui.error("Environment warning: missing packages -> " + ", ".join(missing))
+        if broken_tools:
+            self.ui.error("Tool registry warning: " + ", ".join(broken_tools))
+
+        self.ui.agent_message(
+            "Setup hint:\n"
+            "1) mamba env create -f environment.yml\n"
+            "2) mamba activate amex-ai-agent\n"
+            "3) python agent.py"
+        )
+
+    def _latest_copy_payload(self) -> str:
+        copyable = getattr(self.ui, "last_copyable_message", "")
+        if str(copyable).strip():
+            return str(copyable)
+
+        # Prefer final assistant answers stored in memory over UI status panels like graph traces.
+        for item in reversed(self.memory.state.chat_history):
+            if item.get("role") == "assistant" and str(item.get("message", "")).strip():
+                return str(item.get("message", ""))
+
+        if self.last_parsed:
+            if self.last_parsed.final_answer.strip():
+                return self.last_parsed.final_answer
+            if self.last_parsed.explanation.strip():
+                return self.last_parsed.explanation
+
+        return self.ui.last_agent_message
+
+    def _set_copyable_message(self, message: str) -> None:
+        setter = getattr(self.ui, "set_copyable_message", None)
+        if callable(setter):
+            setter(message)
+
+    def _copy_latest_output(self) -> None:
+        payload = self._latest_copy_payload().strip()
+        if not payload:
+            self.ui.error("No agent output available to copy yet.")
+            return
+        if pyperclip is None:
+            self.ui.error("Clipboard dependency not available. Install pyperclip in the conda env.")
+            return
+        try:
+            pyperclip.copy(payload)
+            self.ui.copied_notice()
+        except Exception as exc:  # noqa: BLE001
+            self.ui.error(
+                "Clipboard copy failed. If running over SSH/remote shell, clipboard may be unavailable. "
+                f"Details: {exc}"
+            )
 
     def _handle_command(self, command: str) -> bool:
         if command == "/help":
             self.ui.agent_message(
-                "Commands: /help, /clear, /history, /tools, /files, /run, /plan, /reason, /memory, /exit"
+                "Commands: /help, /clear, /history, /tools, /doctor, /files, /run, /plan, /reason, /memory, /copy, /prompts, /exit"
             )
             return False
         if command == "/clear":
@@ -160,6 +250,14 @@ class AgentChatApp:
             return False
         if command == "/tools":
             self.ui.agent_message("Available tools: " + ", ".join(self.executor.list_tools()))
+            return False
+        if command == "/doctor":
+            checks = self._preflight_checks()
+            lines = ["Package checks:"]
+            lines.extend(f"- {name}: {status}" for name, status in checks["packages"].items())
+            lines.append("\nTool registry checks:")
+            lines.extend(f"- {name}: {status}" for name, status in checks["tools"].items())
+            self.ui.agent_message("\n".join(lines))
             return False
         if command == "/files":
             files = [str(path) for path in Path('.').iterdir() if path.is_file()]
@@ -186,6 +284,17 @@ class AgentChatApp:
             return False
         if command == "/memory":
             self.ui.agent_message(self.memory.context_text(max_items=20) or "Memory empty")
+            return False
+        if command == "/copy":
+            self._copy_latest_output()
+            return False
+        if command == "/prompts":
+            self.ui.agent_message(
+                "Prompt usage:\n"
+                "- Active runtime: reasoning_loop_prompt.md (normal chat + /reason)\n"
+                "- /plan: uses same reasoning-loop contract via planner alias\n"
+                "- Experimental (moved): prompts/experimental/{intent,routing,conversation,evaluation}_prompt.md"
+            )
             return False
         if command == "/exit":
             self.ui.agent_message("Goodbye.")
