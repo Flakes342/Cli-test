@@ -91,7 +91,7 @@ class AgentChatApp:
             self.ui.error("No task found. Enter a message first.")
             return
 
-        self.ui.agent_message("Running staged flow: route -> plan -> tools (as needed)...")
+        self.ui.agent_message("Building execution graph...")
         self.graph.run(self.last_task)
 
     def _preflight_checks(self) -> dict[str, dict[str, str]]:

@@ -18,6 +18,7 @@ class GraphState:
     iteration: int = 0
     tool_feedback: str = "No tool outputs yet."
     parsed: ParsedResponse | None = None
+    plan_summary: str = ""
     routing: RoutingResponse | None = None
     final_answer: str = ""
     done: bool = False
@@ -70,7 +71,10 @@ class FraudReasoningGraph:
         return state
 
     def _route_node(self, state: GraphState) -> str:
-        prompt = self.planner.build_routing_prompt(task=state.task, intent_analysis="No intent analysis available yet.")
+        prompt = self.planner.build_routing_prompt(
+            task=state.task,
+            intent_analysis=state.plan_summary or "No intent analysis available yet.",
+        )
         self.memory.add_chat("agent", prompt)
         response = self.llm.invoke(prompt, label="routing-stage")
         self.memory.add_chat("assistant_raw", f"[routing]\n{response}")
@@ -141,7 +145,8 @@ class FraudReasoningGraph:
 
         parsed = self.parser.parse(response)
         state.parsed = parsed
-        self.memory.add_task_summary("; ".join(parsed.plan[:3]) or parsed.explanation or "No plan")
+        state.plan_summary = "; ".join(parsed.plan[:3]) or parsed.explanation or "No plan"
+        self.memory.add_task_summary(state.plan_summary)
 
         plan_text = "\n".join(f"{idx+1}. {step}" for idx, step in enumerate(parsed.plan)) or "No PLAN section parsed."
         self.ui.agent_message(f"Plan parsed:\n{plan_text}\n\nNEXT_ACTION: {parsed.next_action}")
