@@ -55,6 +55,10 @@ class FraudReasoningGraph:
                 node = self._route_node(state)
             elif node == "plan":
                 node = self._plan_node(state)
+            elif node == "route":
+                node = self._route_node(state)
+            elif node == "reason":
+                node = self._reason_node(state)
             elif node == "tools":
                 node = self._tools_node(state)
             elif node == "done":
@@ -78,6 +82,51 @@ class FraudReasoningGraph:
         return "plan"
 
     def _plan_node(self, state: GraphState) -> str:
+        prompt = self.planner.build_plan_prompt(
+            task=state.task,
+            memory_context=self.memory.context_text(max_items=20),
+        )
+        self.memory.add_chat("agent", prompt)
+        response = self.llm.invoke(prompt, label="plan-stage")
+        self.memory.add_chat("assistant_raw", f"[plan]\n{response}")
+
+        parsed = self.parser.parse(response)
+        state.plan_summary = "; ".join(parsed.plan[:3]) or parsed.explanation or "No plan"
+        self.memory.add_task_summary(state.plan_summary)
+
+        plan_text = "\n".join(f"{idx+1}. {step}" for idx, step in enumerate(parsed.plan)) or "No PLAN section parsed."
+        self.ui.agent_message(f"Plan parsed:\n{plan_text}")
+        return "route"
+
+    def _route_node(self, state: GraphState) -> str:
+        prompt = self.planner.build_routing_prompt(task=state.task, intent_analysis=state.plan_summary)
+        self.memory.add_chat("agent", prompt)
+        response = self.llm.invoke(prompt, label="routing-stage")
+        self.memory.add_chat("assistant_raw", f"[routing]\n{response}")
+
+        routing = self.parser.parse_routing(response)
+        state.routing = routing
+        route = routing.task_type if routing.task_type in {"conversation", "evaluate", "execute"} else "execute"
+        self.ui.agent_message(f"Route selected: {route}")
+
+        if route == "conversation":
+            state.final_answer = "Happy to help. Share the exact fraud analytics task and I will execute it step-by-step."
+            self.memory.add_chat("assistant", state.final_answer)
+            self.ui.agent_message(state.final_answer)
+            return "done"
+
+        if route == "evaluate":
+            state.final_answer = (
+                "Evaluation mode selected. Please provide the outputs you want interpreted, "
+                "or ask an execution task to generate fresh results."
+            )
+            self.memory.add_chat("assistant", state.final_answer)
+            self.ui.agent_message(state.final_answer)
+            return "done"
+
+        return "reason"
+
+    def _reason_node(self, state: GraphState) -> str:
         state.iteration += 1
         prompt = self.planner.build_plan_prompt(
             task=state.task,
@@ -136,4 +185,4 @@ class FraudReasoningGraph:
                 self.ui.error(f"[tool={result.tool}] ERROR: {result.output}")
 
         state.tool_feedback = "\n\n".join(rendered_results) if rendered_results else "No tool results."
-        return "plan"
+        return "reason"
