@@ -64,8 +64,6 @@ class ChatUI:
     def tool_log(self, message: str) -> None:
         self.console.print(Panel(Text(message), title="Tool Output", border_style="yellow"))
 
-    def copied_notice(self) -> None:
-        self.console.print(Text("📋 Copied latest agent output to clipboard.", style="bright_green"))
 
     def error(self, message: str) -> None:
         self.console.print(Text(message, style="red"))
