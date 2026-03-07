@@ -33,6 +33,79 @@ Return JSON with this schema:
 """
 
 
+ROUTING_TEMPLATE = """You are a task routing agent in a fraud analytics system.
+Choose one path only and do not request tool execution in this stage.
+
+USER TASK:
+{task}
+
+INTENT ANALYSIS:
+{intent_analysis}
+
+Return strict JSON:
+{{
+  "task_type": "conversation | evaluate | execute",
+  "recommended_tools": ["tool_name"],
+  "risks_or_gaps": ["potential issue or missing information"]
+}}
+"""
+
+
+INTENT_TEMPLATE = """You are an intent analysis stage for a fraud analytics workflow.
+Summarize what success looks like and key constraints.
+
+TASK:
+{task}
+
+CONTEXT:
+{memory}
+
+Return strict JSON:
+{{
+  "intent_summary": "short summary",
+  "success_criteria": ["criterion"],
+  "constraints": ["constraint"]
+}}
+"""
+
+
+CONVERSATION_TEMPLATE = """You are a fraud analytics assistant.
+Provide a direct conversational response without tools.
+
+TASK:
+{task}
+
+CONTEXT:
+{memory}
+
+Return strict JSON:
+{{
+  "message": "assistant response"
+}}
+"""
+
+
+EVALUATION_TEMPLATE = """You are evaluating prior workflow/tool outputs.
+Summarize findings, caveats, and next step.
+
+TASK:
+{task}
+
+CONTEXT:
+{memory}
+
+LATEST TOOL OUTPUTS:
+{tool_feedback}
+
+Return strict JSON:
+{{
+  "finding_summary": "summary",
+  "confidence_and_limitations": "confidence and caveats",
+  "recommended_next_step": "next step"
+}}
+"""
+
+
 REASONING_LOOP_TEMPLATE = """You are orchestrating a multi-step fraud analytics workflow with tool feedback.
 This is the only stage that may emit executable tool calls.
 Return JSON only.
