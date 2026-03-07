@@ -18,7 +18,6 @@ class GraphState:
     iteration: int = 0
     tool_feedback: str = "No tool outputs yet."
     parsed: ParsedResponse | None = None
-    plan_summary: str = ""
     routing: RoutingResponse | None = None
     final_answer: str = ""
     done: bool = False
@@ -26,7 +25,7 @@ class GraphState:
 
 
 class FraudReasoningGraph:
-    """Simple staged graph: plan -> route -> execute loop (if needed)."""
+    """Simple staged graph: route -> plan -> tools (loop as needed)."""
 
     def __init__(
         self,
@@ -48,11 +47,13 @@ class FraudReasoningGraph:
 
     def run(self, task: str) -> GraphState:
         state = GraphState(task=task)
-        node = "plan"
+        node = "route"
 
         while not state.done:
             state.trace.append(node)
-            if node == "plan":
+            if node == "route":
+                node = self._route_node(state)
+            elif node == "plan":
                 node = self._plan_node(state)
             elif node == "route":
                 node = self._route_node(state)
@@ -67,6 +68,18 @@ class FraudReasoningGraph:
                 state.done = True
 
         return state
+
+    def _route_node(self, state: GraphState) -> str:
+        prompt = self.planner.build_routing_prompt(task=state.task, intent_analysis="No intent analysis available yet.")
+        self.memory.add_chat("agent", prompt)
+        response = self.llm.invoke(prompt, label="routing-stage")
+        self.memory.add_chat("assistant_raw", f"[routing]\n{response}")
+
+        routing = self.parser.parse_routing(response)
+        state.routing = routing
+        route = routing.task_type if routing.task_type in {"conversation", "evaluate", "execute"} else "execute"
+        self.ui.agent_message(f"Route selected: {route}")
+        return "plan"
 
     def _plan_node(self, state: GraphState) -> str:
         prompt = self.planner.build_plan_prompt(
@@ -115,19 +128,20 @@ class FraudReasoningGraph:
 
     def _reason_node(self, state: GraphState) -> str:
         state.iteration += 1
-        prompt = self.planner.build_reasoning_prompt(
+        prompt = self.planner.build_plan_prompt(
             task=state.task,
             memory_context=self.memory.context_text(max_items=20),
+            routing=state.routing,
             iteration=state.iteration,
             tool_feedback=state.tool_feedback,
         )
         self.memory.add_chat("agent", prompt)
-        response = self.llm.invoke(prompt, label=f"reasoning-iteration-{state.iteration}")
-        self.memory.add_chat("assistant_raw", f"[reasoning-{state.iteration}]\n{response}")
+        response = self.llm.invoke(prompt, label=f"plan-iteration-{state.iteration}")
+        self.memory.add_chat("assistant_raw", f"[plan-{state.iteration}]\n{response}")
 
         parsed = self.parser.parse(response)
         state.parsed = parsed
-        self.memory.add_task_summary("; ".join(parsed.plan[:3]) or "No plan")
+        self.memory.add_task_summary("; ".join(parsed.plan[:3]) or parsed.explanation or "No plan")
 
         plan_text = "\n".join(f"{idx+1}. {step}" for idx, step in enumerate(parsed.plan)) or "No PLAN section parsed."
         self.ui.agent_message(f"Plan parsed:\n{plan_text}\n\nNEXT_ACTION: {parsed.next_action}")
@@ -135,14 +149,20 @@ class FraudReasoningGraph:
         if parsed.next_action == "DONE":
             state.final_answer = parsed.final_answer or parsed.explanation or "Task completed."
             self.memory.add_chat("assistant", state.final_answer)
-            self.ui.agent_message(f"\n{state.final_answer}")
+            self.ui.agent_message(state.final_answer)
             return "done"
 
         if state.iteration >= max(1, self.config.max_reasoning_loops):
             state.final_answer = (
-                f"Reached max reasoning iterations ({self.config.max_reasoning_loops}). "
+                f"Reached max planning iterations ({self.config.max_reasoning_loops}). "
                 "Review /memory and run /reason again if needed."
             )
+            self.ui.error(state.final_answer)
+            return "done"
+
+        if not parsed.tools:
+            state.final_answer = parsed.explanation or "No tools requested and task is not marked DONE."
+            self.memory.add_chat("assistant", state.final_answer)
             self.ui.error(state.final_answer)
             return "done"
 
@@ -150,9 +170,9 @@ class FraudReasoningGraph:
 
     def _tools_node(self, state: GraphState) -> str:
         if not state.parsed or not state.parsed.tools:
-            self.ui.tool_log("No tool calls found in parsed response.")
             state.tool_feedback = "No tool calls found in parsed response."
-            return "reason"
+            self.ui.tool_log(state.tool_feedback)
+            return "plan"
 
         results = self.executor.execute(state.parsed.tools)
         rendered_results: List[str] = []

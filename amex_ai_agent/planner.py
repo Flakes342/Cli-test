@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 
 from amex_ai_agent.prompts.registry import get_prompt_template
+from amex_ai_agent.parser import RoutingResponse
 
 
 class PromptPlanner:
@@ -36,30 +37,29 @@ class PromptPlanner:
             full_context = f"{memory_context}\n\nFILE CONTEXT:\n{file_context}"
         return full_context.strip() or "No prior context"
 
-    def build_plan_prompt(self, task: str, memory_context: str) -> str:
+    def build_plan_prompt(
+        self,
+        task: str,
+        memory_context: str,
+        routing: RoutingResponse | None,
+        iteration: int,
+        tool_feedback: str,
+    ) -> str:
+        route = routing.task_type if routing else "execute"
+        recommended = ", ".join(routing.recommended_tools) if routing and routing.recommended_tools else "none"
+        gaps = "; ".join(routing.risks_or_gaps) if routing and routing.risks_or_gaps else "none"
         return get_prompt_template("plan").format(
             task=task,
             memory=self._build_full_context(task, memory_context),
-            iteration=1,
-            tool_feedback="No tool outputs yet.",
+            route=route,
+            recommended_tools=recommended,
+            risks_or_gaps=gaps,
+            iteration=iteration,
+            tool_feedback=tool_feedback or "No tool outputs yet.",
         )
 
     def build_routing_prompt(self, task: str, intent_analysis: str) -> str:
         return get_prompt_template("routing").format(
             task=task,
             intent_analysis=intent_analysis or "No intent analysis available.",
-        )
-
-    def build_reasoning_prompt(
-        self,
-        task: str,
-        memory_context: str,
-        iteration: int,
-        tool_feedback: str,
-    ) -> str:
-        return get_prompt_template("reasoning_loop").format(
-            task=task,
-            iteration=iteration,
-            memory=self._build_full_context(task, memory_context),
-            tool_feedback=tool_feedback or "No tool outputs yet.",
         )
