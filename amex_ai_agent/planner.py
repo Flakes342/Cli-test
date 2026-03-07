@@ -36,12 +36,18 @@ class PromptPlanner:
             full_context = f"{memory_context}\n\nFILE CONTEXT:\n{file_context}"
         return full_context.strip() or "No prior context"
 
-    def build_prompt(self, task: str, memory_context: str) -> str:
-        return self.build_reasoning_prompt(
+    def build_plan_prompt(self, task: str, memory_context: str) -> str:
+        return get_prompt_template("plan").format(
             task=task,
-            memory_context=memory_context,
+            memory=self._build_full_context(task, memory_context),
             iteration=1,
             tool_feedback="No tool outputs yet.",
+        )
+
+    def build_routing_prompt(self, task: str, intent_analysis: str) -> str:
+        return get_prompt_template("routing").format(
+            task=task,
+            intent_analysis=intent_analysis or "No intent analysis available.",
         )
 
     def build_reasoning_prompt(
