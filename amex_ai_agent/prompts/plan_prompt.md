@@ -50,6 +50,7 @@ Use only these exact tool names:
 - Do NOT invent tool outputs or files.
 - Keep plan concise and actionable.
 - If task is done, set `next_action` to `DONE` and provide `final_answer`.
+- For route `conversation` or `evaluate`, prefer replying directly with `next_action`=`DONE` and a clear `final_answer` unless execution is explicitly requested.
 - If more work is needed, set `next_action` to `CONTINUE` and provide tool calls when execution is required.
 
 ---

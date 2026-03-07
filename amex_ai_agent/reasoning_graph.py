@@ -166,6 +166,13 @@ class FraudReasoningGraph:
             return "done"
 
         if not parsed.tools:
+            route = state.routing.task_type if state.routing else "execute"
+            if route in {"conversation", "evaluate"}:
+                state.final_answer = parsed.final_answer or parsed.explanation or "Task completed."
+                self.memory.add_chat("assistant", state.final_answer)
+                self.ui.agent_message(state.final_answer)
+                return "done"
+
             state.final_answer = parsed.explanation or "No tools requested and task is not marked DONE."
             self.memory.add_chat("assistant", state.final_answer)
             self.ui.error(state.final_answer)
