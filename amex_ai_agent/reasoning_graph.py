@@ -113,21 +113,6 @@ class FraudReasoningGraph:
         route = routing.task_type if routing.task_type in {"conversation", "evaluate", "execute"} else "execute"
         self.ui.agent_message(f"Route selected: {route}")
 
-        if route == "conversation":
-            state.final_answer = "Happy to help. Share the exact fraud analytics task and I will execute it step-by-step."
-            self.memory.add_chat("assistant", state.final_answer)
-            self.ui.agent_message(state.final_answer)
-            return "done"
-
-        if route == "evaluate":
-            state.final_answer = (
-                "Evaluation mode selected. Please provide the outputs you want interpreted, "
-                "or ask an execution task to generate fresh results."
-            )
-            self.memory.add_chat("assistant", state.final_answer)
-            self.ui.agent_message(state.final_answer)
-            return "done"
-
         return "reason"
 
     def _reason_node(self, state: GraphState) -> str:
