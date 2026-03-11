@@ -50,6 +50,9 @@ class ChatUI:
     def tool_log(self, message: str) -> None:
         self.console.print(Panel(Text(message), title="Tool Output", border_style="yellow"))
 
+    def info(self, message: str) -> None:
+        self.console.print(Panel(Text(message), title="Info", border_style="blue"))
+
 
     def error(self, message: str) -> None:
         self.console.print(Text(message, style="red"))
