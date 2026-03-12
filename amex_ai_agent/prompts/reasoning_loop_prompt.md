@@ -68,7 +68,7 @@ Use only these exact tool names:
   "tools": [
     {{
       "name": "tool_name",
-      "argument": "raw argument string"
+      "argument": {{"param": "value"}}
     }}
   ],
   "code": "Optional code snippet, else empty string",

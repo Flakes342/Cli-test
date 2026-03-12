@@ -63,7 +63,7 @@ Use only these exact tool names:
 
 {{
   "plan": ["step 1", "step 2"],
-  "tools": [{{"name": "tool_name", "argument": "raw argument string"}}],
+  "tools": [{{"name": "tool_name", "argument": {{"param": "value"}}}}],
   "code": "optional code or empty string",
   "explanation": "concise reasoning",
   "next_action": "CONTINUE or DONE",
