@@ -25,7 +25,7 @@ LATEST TOOL OUTPUTS:
 
 Use only these exact tool names:
 
-* **data_prep(dataset_path_or_instruction)**
+* **data_prep(instruction_or_json)**
 * **rca_analysis(transcript_or_notes)**
 * **case_review(case_json_or_notes)**
 * **alert_rationalization(alert_csv_path_or_instruction)**
@@ -51,6 +51,10 @@ Use only these exact tool names:
 * Do NOT invent data, files, or tool outputs.
 * If input details are missing, state that clearly in explanation.
 * If no tool is needed this iteration, set `"tools": []`.
+* For `data_prep`, pass only runtime parameters as JSON: `{"start_dt":"YYYY-MM-DD","end_dt":"YYYY-MM-DD","model":"rnn|xgboost|ensemble","sample_rate":0.025}`.
+* Do not pass SQL/table/workflow details; the underlying pipeline is already fixed.
+* Extract `start_dt`, `end_dt`, `model`, and `sample_rate` from the user request yourself before calling `data_prep`.
+* If required fields are missing/ambiguous, ask a concise follow-up question instead of forcing a tool call.
 
 ---
 
