@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Iterable
 
 from rich.console import Console
@@ -52,6 +53,12 @@ class ChatUI:
 
     def info(self, message: str) -> None:
         self.console.print(Panel(Text(message), title="Info", border_style="blue"))
+
+    def loading_timer(self, seconds: int = 10, label: str = "Working on it") -> None:
+        with self.console.status(f"[cyan]{label}... {seconds}s remaining[/cyan]") as status:
+            for remaining in range(seconds, 0, -1):
+                status.update(f"[cyan]{label}... {remaining}s remaining[/cyan]")
+                time.sleep(1)
 
 
     def error(self, message: str) -> None:

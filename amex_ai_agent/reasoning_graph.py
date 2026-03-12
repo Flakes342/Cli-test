@@ -173,7 +173,7 @@ class FraudReasoningGraph:
 
         tool_names = ", ".join(call.name for call in state.parsed.tools)
         self.ui.info(f"Running tool(s): {tool_names}")
-        self.ui.info("Still working on it...")
+        self.ui.loading_timer(seconds=10, label="Still working on it")
         results = self.executor.execute(state.parsed.tools)
         rendered_results: List[str] = []
         for result in results:
