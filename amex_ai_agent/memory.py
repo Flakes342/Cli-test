@@ -35,9 +35,22 @@ class MemoryStore:
         if self.session_path.exists():
             with self.session_path.open("r", encoding="utf-8") as file:
                 data = json.load(file)
-            self.state.chat_history = data.get("chat_history", [])
-            self.state.tool_runs = data.get("tool_runs", [])
-            self.state.task_summaries = data.get("task_summaries", [])
+            self.state.chat_history = self._sanitize_chat_history(data.get("chat_history", []))
+            self.state.tool_runs = self._sanitize_list_of_dicts(data.get("tool_runs", []))
+            self.state.task_summaries = self._sanitize_list_of_dicts(data.get("task_summaries", []))
+
+    def _sanitize_list_of_dicts(self, value: Any) -> List[Dict[str, Any]]:
+        if not isinstance(value, list):
+            return []
+        return [item for item in value if isinstance(item, dict)]
+
+    def _sanitize_chat_history(self, value: Any) -> List[Dict[str, Any]]:
+        sanitized = self._sanitize_list_of_dicts(value)
+        for item in sanitized:
+            item.setdefault("role", "unknown")
+            item.setdefault("message", "")
+            item.setdefault("timestamp", "")
+        return sanitized
 
     def save(self) -> None:
         payload = {
@@ -91,5 +104,5 @@ class MemoryStore:
         ]
         recent = filtered[-max_items:]
         return "\n".join(
-            f"{item['role'].upper()}: {str(item['message'])[:max_chars]}" for item in recent
+            f"{str(item.get('role', 'unknown')).upper()}: {str(item.get('message', ''))[:max_chars]}" for item in recent
         )

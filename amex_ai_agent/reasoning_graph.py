@@ -171,9 +171,13 @@ class FraudReasoningGraph:
             self.ui.tool_log(state.tool_feedback)
             return "plan"
 
+        tool_names = ", ".join(call.name for call in state.parsed.tools)
+        self.ui.info(f"Running tool(s): {tool_names}")
+        self.ui.loading_timer(seconds=10, label="Still working on it")
         results = self.executor.execute(state.parsed.tools)
         rendered_results: List[str] = []
         for result in results:
+            self.ui.info(f"Completed: {result.tool} ({result.status})")
             self.memory.add_tool_run(result.tool, "", result.output, result.status)
             rendered_results.append(f"[{result.tool}] ({result.status})\n{result.output}")
             if result.status == "success":
