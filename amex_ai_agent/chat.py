@@ -137,7 +137,9 @@ class AgentChatApp:
             return False
         if command == "/history":
             for item in self.memory.state.chat_history[-20:]:
-                self.ui.agent_message(f"{item['role']}: {item['message'][:300]}")
+                role = str(item.get("role", "unknown"))
+                message = str(item.get("message", ""))
+                self.ui.agent_message(f"{role}: {message[:300]}")
             return False
         if command == "/tools":
             self.ui.agent_message("Available tools: " + ", ".join(self.executor.list_tools()))
