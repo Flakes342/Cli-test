@@ -52,12 +52,7 @@ Use only these exact tool names:
 * Do NOT invent data, files, or tool outputs.
 * If input details are missing, state that clearly in explanation.
 * If no tool is needed this iteration, set `"tools": []`.
-* For `data_prep`, pass only runtime parameters as JSON: `{{"start_dt":"YYYY-MM-DD","end_dt":"YYYY-MM-DD","model":"rnn|xgboost|ensemble","sample_rate":0.025}}`.
-* Do not pass SQL/table/workflow details; the underlying pipeline is already fixed.
-* Extract `start_dt`, `end_dt`, `model`, and `sample_rate` from the user request yourself before calling `data_prep`.
-* If required fields are missing/ambiguous, ask a concise follow-up question instead of forcing a tool call.
-* Workflow policy: when user asks for metrics but no scored dataset exists, prefer `data_prep -> model_score -> compute_metrics`.
-* Workflow policy: for RCA requiring model/score context, prefer `data_prep -> model_score (if needed) -> rca_analysis`.
+* Follow any appended TOOL-SPECIFIC GUIDANCE section when present.
 
 ---
 
