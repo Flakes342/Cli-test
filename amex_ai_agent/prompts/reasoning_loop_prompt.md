@@ -25,7 +25,8 @@ LATEST TOOL OUTPUTS:
 
 Use only these exact tool names:
 
-* **data_prep(dataset_path_or_instruction)**
+* **data_prep(instruction_or_json)**
+* **model_score(instruction_or_json)**
 * **rca_analysis(transcript_or_notes)**
 * **case_review(case_json_or_notes)**
 * **alert_rationalization(alert_csv_path_or_instruction)**
@@ -51,6 +52,7 @@ Use only these exact tool names:
 * Do NOT invent data, files, or tool outputs.
 * If input details are missing, state that clearly in explanation.
 * If no tool is needed this iteration, set `"tools": []`.
+* Follow any appended TOOL-SPECIFIC GUIDANCE section when present.
 
 ---
 
@@ -64,7 +66,7 @@ Use only these exact tool names:
   "tools": [
     {{
       "name": "tool_name",
-      "argument": "raw argument string"
+      "argument": {{"param": "value"}}
     }}
   ],
   "code": "Optional code snippet, else empty string",

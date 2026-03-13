@@ -66,7 +66,11 @@ class ResponseParser:
             for item in tools:
                 if isinstance(item, dict):
                     name = str(item.get("name", "")).strip()
-                    argument = str(item.get("argument", "")).strip()
+                    raw_argument = item.get("argument", "")
+                    if isinstance(raw_argument, (dict, list)):
+                        argument = json.dumps(raw_argument)
+                    else:
+                        argument = str(raw_argument).strip()
                     if name:
                         parsed.tools.append(ToolCall(name=name, argument=argument))
 
@@ -132,6 +136,13 @@ class ResponseParser:
         except json.JSONDecodeError:
             pass
 
+        repaired = self._repair_argument_string_json(stripped)
+        if repaired != stripped:
+            try:
+                return json.loads(repaired)
+            except json.JSONDecodeError:
+                pass
+
         # fenced code block
         fence_match = re.search(r"```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```", stripped, re.DOTALL | re.IGNORECASE)
         if fence_match:
@@ -150,5 +161,21 @@ class ResponseParser:
                 try:
                     return json.loads(candidate)
                 except json.JSONDecodeError:
+                    repaired_candidate = self._repair_argument_string_json(candidate)
+                    try:
+                        return json.loads(repaired_candidate)
+                    except json.JSONDecodeError:
+                        pass
                     continue
         return None
+
+    def _repair_argument_string_json(self, text: str) -> str:
+        pattern = re.compile(r'("argument"\s*:\s*)"(\{.*?\})"', re.DOTALL)
+
+        def _escape_match(match: re.Match[str]) -> str:
+            prefix = match.group(1)
+            inner = match.group(2)
+            escaped = inner.replace('\\', '\\\\').replace('"', '\\"')
+            return f'{prefix}"{escaped}"'
+
+        return pattern.sub(_escape_match, text)

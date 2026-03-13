@@ -23,6 +23,7 @@ class ToolExecutor:
 
     REGISTRY = {
         "data_prep": "amex_ai_agent.tools.data_prep",
+        "model_score": "amex_ai_agent.tools.model_score",
         "rca_analysis": "amex_ai_agent.tools.rca_analysis",
         "case_review": "amex_ai_agent.tools.case_review",
         "alert_rationalization": "amex_ai_agent.tools.alerts",
@@ -32,6 +33,7 @@ class ToolExecutor:
 
     ALIASES = {
         "metrics": "compute_metrics",
+        "score_model": "model_score",
     }
 
     def list_tools(self) -> List[str]:
