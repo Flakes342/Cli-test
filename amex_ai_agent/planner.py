@@ -37,6 +37,26 @@ class PromptPlanner:
             full_context = f"{memory_context}\n\nFILE CONTEXT:\n{file_context}"
         return full_context.strip() or "No prior context"
 
+    def _tool_prompt_path(self, tool_name: str) -> Path:
+        return Path(__file__).parent / "prompts" / "tools" / f"{tool_name}.md"
+
+    def _tool_specific_guidance(self, routing: RoutingResponse | None) -> str:
+        if not routing or not routing.recommended_tools:
+            return ""
+
+        sections: list[str] = []
+        for tool_name in routing.recommended_tools:
+            path = self._tool_prompt_path(tool_name)
+            if not path.exists() or not path.is_file():
+                continue
+            content = path.read_text(encoding="utf-8", errors="ignore").strip()
+            if content:
+                sections.append(content)
+
+        if not sections:
+            return ""
+        return "\n\n---\n\nTOOL-SPECIFIC GUIDANCE:\n\n" + "\n\n".join(sections)
+
     def build_plan_prompt(
         self,
         task: str,
@@ -48,7 +68,7 @@ class PromptPlanner:
         route = routing.task_type if routing else "execute"
         recommended = ", ".join(routing.recommended_tools) if routing and routing.recommended_tools else "none"
         gaps = "; ".join(routing.risks_or_gaps) if routing and routing.risks_or_gaps else "none"
-        return get_prompt_template("plan").format(
+        prompt = get_prompt_template("plan").format(
             task=task,
             memory=self._build_full_context(task, memory_context),
             route=route,
@@ -57,6 +77,7 @@ class PromptPlanner:
             iteration=iteration,
             tool_feedback=tool_feedback or "No tool outputs yet.",
         )
+        return prompt + self._tool_specific_guidance(routing)
 
     def build_routing_prompt(self, task: str, intent_analysis: str) -> str:
         return get_prompt_template("routing").format(

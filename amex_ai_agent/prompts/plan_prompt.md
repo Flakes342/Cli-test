@@ -35,6 +35,7 @@ LATEST TOOL OUTPUTS:
 
 Use only these exact tool names:
 - data_prep
+- model_score
 - rca_analysis
 - case_review
 - alert_rationalization
@@ -52,6 +53,7 @@ Use only these exact tool names:
 - If task is done, set `next_action` to `DONE` and provide `final_answer`.
 - For route `conversation` or `evaluate`, prefer replying directly with `next_action`=`DONE` and a clear `final_answer` unless execution is explicitly requested.
 - If more work is needed, set `next_action` to `CONTINUE` and provide tool calls when execution is required.
+- Follow any appended TOOL-SPECIFIC GUIDANCE section when present.
 
 ---
 
@@ -59,7 +61,7 @@ Use only these exact tool names:
 
 {{
   "plan": ["step 1", "step 2"],
-  "tools": [{{"name": "tool_name", "argument": "raw argument string"}}],
+  "tools": [{{"name": "tool_name", "argument": {{"param": "value"}}}}],
   "code": "optional code or empty string",
   "explanation": "concise reasoning",
   "next_action": "CONTINUE or DONE",
