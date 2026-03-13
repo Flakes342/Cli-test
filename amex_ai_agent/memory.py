@@ -33,8 +33,11 @@ class MemoryStore:
 
     def _load(self) -> None:
         if self.session_path.exists():
-            with self.session_path.open("r", encoding="utf-8") as file:
-                data = json.load(file)
+            try:
+                with self.session_path.open("r", encoding="utf-8") as file:
+                    data = json.load(file)
+            except json.JSONDecodeError:
+                data = {}
             self.state.chat_history = self._sanitize_chat_history(data.get("chat_history", []))
             self.state.tool_runs = self._sanitize_list_of_dicts(data.get("tool_runs", []))
             self.state.task_summaries = self._sanitize_list_of_dicts(data.get("task_summaries", []))
@@ -47,6 +50,9 @@ class MemoryStore:
     def _sanitize_chat_history(self, value: Any) -> List[Dict[str, Any]]:
         sanitized = self._sanitize_list_of_dicts(value)
         for item in sanitized:
+            if "message" not in item and "summary" in item:
+                item["message"] = str(item.get("summary", ""))
+                item.setdefault("role", "assistant")
             item.setdefault("role", "unknown")
             item.setdefault("message", "")
             item.setdefault("timestamp", "")

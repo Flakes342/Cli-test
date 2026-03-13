@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 from typing import List
 
 from amex_ai_agent.config import AgentConfig
@@ -21,6 +22,8 @@ class GraphState:
     plan_summary: str = ""
     routing: RoutingResponse | None = None
     final_answer: str = ""
+    last_tool_signature: str = ""
+    repeated_tool_call_count: int = 0
     done: bool = False
     trace: List[str] = field(default_factory=list)
 
@@ -45,6 +48,12 @@ class FraudReasoningGraph:
         self.memory = memory
         self.llm = llm
         self.ui = ui
+
+    def _tool_signature(self, parsed: ParsedResponse | None) -> str:
+        if not parsed or not parsed.tools:
+            return ""
+        payload = [{"name": tool.name, "argument": tool.argument} for tool in parsed.tools]
+        return json.dumps(payload, sort_keys=True)
 
     def run(self, task: str) -> GraphState:
         state = GraphState(task=task)
@@ -159,6 +168,23 @@ class FraudReasoningGraph:
                 return "done"
 
             state.final_answer = parsed.explanation or "No tools requested and task is not marked DONE."
+            self.memory.add_chat("assistant", state.final_answer)
+            self.ui.error(state.final_answer)
+            return "done"
+
+        signature = self._tool_signature(parsed)
+        if signature and signature == state.last_tool_signature:
+            state.repeated_tool_call_count += 1
+        else:
+            state.last_tool_signature = signature
+            state.repeated_tool_call_count = 0
+
+        if state.repeated_tool_call_count >= 1:
+            state.final_answer = (
+                "Detected repeated identical tool call with unchanged request. "
+                "Please provide the next step explicitly (e.g., call model_score/compute_metrics) "
+                "or mark task as DONE to avoid execution loop."
+            )
             self.memory.add_chat("assistant", state.final_answer)
             self.ui.error(state.final_answer)
             return "done"
