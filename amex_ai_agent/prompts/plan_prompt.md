@@ -35,6 +35,7 @@ LATEST TOOL OUTPUTS:
 
 Use only these exact tool names:
 - data_prep
+- model_score
 - rca_analysis
 - case_review
 - alert_rationalization
@@ -56,6 +57,8 @@ Use only these exact tool names:
 - Do not pass SQL/table/workflow details; the underlying pipeline is already fixed.
 - Extract `start_dt`, `end_dt`, `model`, and `sample_rate` from user text before calling `data_prep`.
 - If required fields are missing/ambiguous, return a concise clarification question instead of forcing a tool call.
+- Workflow policy: when user asks for metrics but no scored dataset exists, prefer `data_prep -> model_score -> compute_metrics`.
+- Workflow policy: for RCA requiring model/score context, prefer `data_prep -> model_score (if needed) -> rca_analysis`.
 
 ---
 

@@ -86,6 +86,7 @@ No orchestration-node logic needs to change.
 ## Available fraud-focused tools
 
 - `data_prep(dataset_path_or_instruction)`
+- `model_score(model_scoring_instruction_or_json)`
 - `compute_metrics(model_scoring_csv_path)`
 - `rca_analysis(transcript_or_notes)`
 - `case_review(case_json_or_notes)`
