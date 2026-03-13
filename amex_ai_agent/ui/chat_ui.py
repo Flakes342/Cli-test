@@ -30,7 +30,7 @@ class ChatUI:
         self.last_agent_message: str = ""
 
     def render_header(self) -> None:
-        self.console.print(Panel.fit("✶ Welcome to Sally's CLI", border_style="bright_red"))
+        self.console.print(Panel.fit("✶ Welcome to Sally's CLI ✶", border_style="bright_red"))
         self.console.print(Text(LOGO, style="bold #E07A5F"))
 
         details = (
