@@ -1,4 +1,4 @@
-# FraudForge (Human-in-the-loop CLI)
+# SallyCat
 
 A local-first reasoning assistant for fraud data scientists in restricted AMEX-like environments.
 No model API is required today: prompts are generated in CLI, pasted into ChatGPT Enterprise, and responses are pasted back for planning/tool execution.
