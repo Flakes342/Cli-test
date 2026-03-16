@@ -5,6 +5,7 @@ from typing import Iterable
 
 from rich.console import Console
 from rich.panel import Panel
+from rich.rule import Rule
 from rich.text import Text
 
 
@@ -30,36 +31,71 @@ class ChatUI:
         self.last_agent_message: str = ""
 
     def render_header(self) -> None:
-        self.console.print(Panel.fit("✶ Welcome to Sally's CLI ✶", border_style="bright_red"))
-        self.console.print(Text(LOGO, style="bold #E07A5F"))
+        self.console.print(Rule("[bold #D97757]SALLY[/bold #D97757]", style="#2A2A2A"))
+        self.console.print(Text(LOGO, style="bold #D97757"))
 
         details = (
-            f"[bold white]{self.agent_name}[/bold white]\n"
-            "[dim]Reasoning assistant for AMEX fraud data science workflows[/dim]\n\n"
-            "[bold]Mode[/bold]: Interactive HITL (ChatGPT Enterprise copy/paste)\n"
-            f"[bold]Tools[/bold]: {', '.join(self.tools)}"
+            "[bold #F3F4F6]AMEX FRAUD OPS ASSISTANT[/bold #F3F4F6]\n"
+            "[dim]Claude Code-inspired terminal UI · built for focused, high-signal work[/dim]\n\n"
+            "[bold #D1D5DB]Mode[/bold #D1D5DB]: Interactive HITL\n"
+            f"[bold #D1D5DB]Tools[/bold #D1D5DB]: {', '.join(self.tools)}"
         )
-        self.console.print(Panel(Text.from_markup(details), border_style="cyan"))
+        self.console.print(
+            Panel(
+                Text.from_markup(details),
+                border_style="#3A3A3A",
+                title="[bold #D97757]System[/bold #D97757]",
+                title_align="left",
+            )
+        )
 
     def user_message(self, message: str) -> None:
-        self.console.print(Text(f"You > {message}", style="green"))
+        self.console.print(
+            Panel(
+                Text(message, style="#E5E7EB"),
+                title="[bold #9CA3AF]you[/bold #9CA3AF]",
+                title_align="left",
+                border_style="#4B5563",
+            )
+        )
 
     def agent_message(self, message: str) -> None:
         self.last_agent_message = message
-        self.console.print(Panel(Text(message), title=self.agent_name, border_style="bright_cyan"))
+        self.console.print(
+            Panel(
+                Text(message, style="#F9FAFB"),
+                title=f"[bold #D97757]{self.agent_name.lower()}[/bold #D97757]",
+                title_align="left",
+                border_style="#D97757",
+            )
+        )
 
     def tool_log(self, message: str) -> None:
-        self.console.print(Panel(Text(message), title="Tool Output", border_style="yellow"))
+        self.console.print(
+            Panel(
+                Text(message, style="#FCD34D"),
+                title="[bold #F59E0B]tool output[/bold #F59E0B]",
+                title_align="left",
+                border_style="#B45309",
+            )
+        )
 
     def info(self, message: str) -> None:
-        self.console.print(Panel(Text(message), title="Info", border_style="blue"))
+        self.console.print(
+            Panel(
+                Text(message, style="#BFDBFE"),
+                title="[bold #60A5FA]info[/bold #60A5FA]",
+                title_align="left",
+                border_style="#1D4ED8",
+            )
+        )
 
     def loading_timer(self, seconds: int = 10, label: str = "Working on it") -> None:
-        with self.console.status(f"[cyan]{label}... {seconds}s remaining[/cyan]") as status:
+        with self.console.status(f"[#D97757]{label} · {seconds}s remaining[/#D97757]") as status:
             for remaining in range(seconds, 0, -1):
-                status.update(f"[cyan]{label}... {remaining}s remaining[/cyan]")
+                status.update(f"[#D97757]{label} · {remaining}s remaining[/#D97757]")
                 time.sleep(1)
 
 
     def error(self, message: str) -> None:
-        self.console.print(Text(message, style="red"))
+        self.console.print(Panel(Text(message, style="#FCA5A5"), title="[bold red]error[/bold red]", border_style="red"))
