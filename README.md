@@ -25,6 +25,12 @@ If your environment prefers shell-invoked scripts, `bash ./sally run` works too.
 - `./sally doctor` — print saved startup configuration
 - `python agent.py` — legacy entrypoint if you do not want the bootstrap wrapper
 
+## Deeper documentation
+
+For a code-level walkthrough of the full repository, see:
+
+- `docs/DEVELOPER_GUIDE.md`
+
 ## Current tool scope
 
 Enabled tools:
