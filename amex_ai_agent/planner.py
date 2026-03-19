@@ -61,9 +61,9 @@ class PromptPlanner:
         self,
         task: str,
         memory_context: str,
-        routing: RoutingResponse | None,
-        iteration: int,
-        tool_feedback: str,
+        routing: RoutingResponse | None = None,
+        iteration: int = 1,
+        tool_feedback: str = "No tool outputs yet.",
     ) -> str:
         route = routing.task_type if routing else "execute"
         recommended = ", ".join(routing.recommended_tools) if routing and routing.recommended_tools else "none"

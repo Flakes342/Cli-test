@@ -1,6 +1,6 @@
-from _future_ import annotations
+from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True)
@@ -8,6 +8,9 @@ class RNNDataPrepConfig:
     start_dt: str
     end_dt: str
     sample_rate: float = 0.025
-    project_id: str = "prj-p-ai-fraud"
-    dataset_id: str = "atanw9"
-    folder_nm: str = ""
+    project_id: str = ""
+    dataset_id: str = ""
+    folder_nm: str = "rnn_data_prep"
+
+    def to_dict(self) -> dict[str, str | float]:
+        return asdict(self)
