@@ -1,11 +1,12 @@
-from _future_ import annotations
+from __future__ import annotations
 
-import time
-from typing import Iterable
+from contextlib import contextmanager
+from typing import Iterable, Iterator
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.rule import Rule
+from rich.status import Status
 from rich.text import Text
 
 
@@ -16,35 +17,34 @@ LOGO = r"""
     ╚════██║██╔══██║██║     ██║       ╚██╔╝
     ███████║██║  ██║███████╗███████╗   ██║
     ╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝   ╚═╝
-
-            :@@@=            %@     +@:
-           @#                %@@% -@@@:
-         %@                  %@@@@@@@@:
-         %@         @@@@@+   %@ .@* +@:
-         %@       #@@@@@@+ *@@@@% -@@@@@
-         %@@#     #@@@ :@@@-    .@*
-            :@@@= #@@@@# +@@@@@@% -@=
-                  #@@@@@@+ @@@@@@ +@:
 """
+
+
+class LiveStatus:
+    def __init__(self, status: Status) -> None:
+        self._status = status
+
+    def update(self, message: str) -> None:
+        self._status.update(f"[#D97757]{message}[/#D97757]")
+
 
 class ChatUI:
     """Presentation layer for terminal chat and status rendering."""
 
-    def _init_(self, agent_name: str, tools: Iterable[str]) -> None:
+    def __init__(self, agent_name: str, tools: Iterable[str]) -> None:
         self.console = Console()
         self.agent_name = agent_name
         self.tools = list(tools)
-        self.last_agent_message: str = ""
+        self.last_agent_message = ""
 
     def render_header(self) -> None:
         self.console.print(Rule("[bold #D97757]SALLY[/bold #D97757]", style="#2A2A2A"))
         self.console.print(Text(LOGO, style="bold #D97757"))
 
         details = (
-            "[bold #5C87DB]AMEX FRAUD OPS ASSISTANT[/bold #5C87DB]\n"
-            "[dim][/dim]\n\n"
+            "[bold #5C87DB]Fraud workflow orchestration CLI[/bold #5C87DB]\n"
             "[bold #5C87DB]Mode[/bold #5C87DB]: Interactive HITL\n"
-            f"[bold #5C87DB]Tools[/bold #5C87DB]: {', '.join(self.tools)}"
+            f"[bold #5C87DB]Enabled tools[/bold #5C87DB]: {', '.join(self.tools)}"
         )
         self.console.print(
             Panel(
@@ -96,12 +96,16 @@ class ChatUI:
             )
         )
 
-    def loading_timer(self, seconds: int = 10, label: str = "Working on it") -> None:
-        with self.console.status(f"[#D97757]{label} · {seconds}s remaining[/#D97757]") as status:
-            for remaining in range(seconds, 0, -1):
-                status.update(f"[#D97757]{label} · {remaining}s remaining[/#D97757]")
-                time.sleep(1)
-
+    @contextmanager
+    def live_status(self, initial_message: str) -> Iterator[LiveStatus]:
+        with self.console.status(f"[#D97757]{initial_message}[/#D97757]") as status:
+            yield LiveStatus(status)
 
     def error(self, message: str) -> None:
-        self.console.print(Panel(Text(message, style="#FCA5A5"), title="[bold red]error[/bold red]", border_style="red"))
+        self.console.print(
+            Panel(
+                Text(message, style="#FCA5A5"),
+                title="[bold red]error[/bold red]",
+                border_style="red",
+            )
+        )
