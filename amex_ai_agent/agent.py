@@ -4,21 +4,22 @@ import logging
 
 from amex_ai_agent.chat import AgentChatApp
 from amex_ai_agent.config import ConfigLoader
+from amex_ai_agent.logging_utils import configure_logging
 
 
-def setup_logging() -> None:
-    logging.basicConfig(
-        filename="agent.log",
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
-    )
+LOGGER = logging.getLogger(__name__)
+
+
+def run_app(config) -> None:
+    log_path = configure_logging()
+    LOGGER.info("Starting Sally agent. log_path=%s", log_path)
+    app = AgentChatApp(config)
+    app.start()
 
 
 def main() -> None:
-    setup_logging()
     config = ConfigLoader().load()
-    app = AgentChatApp(config)
-    app.start()
+    run_app(config)
 
 
 if __name__ == "__main__":
