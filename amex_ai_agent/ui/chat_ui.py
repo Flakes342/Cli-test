@@ -1,4 +1,4 @@
-from __future__ import annotations
+from _future_ import annotations
 
 import time
 from typing import Iterable
@@ -10,6 +10,13 @@ from rich.text import Text
 
 
 LOGO = r"""
+    ███████╗ █████╗ ██╗     ██╗     ██╗   ██╗
+    ██╔════╝██╔══██╗██║     ██║     ╚██╗ ██╔╝
+    ███████╗███████║██║     ██║      ╚████╔╝
+    ╚════██║██╔══██║██║     ██║       ╚██╔╝
+    ███████║██║  ██║███████╗███████╗   ██║
+    ╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝   ╚═╝
+
             :@@@=            %@     +@:
            @#                %@@% -@@@:
          %@                  %@@@@@@@@:
@@ -17,14 +24,13 @@ LOGO = r"""
          %@       #@@@@@@+ *@@@@% -@@@@@
          %@@#     #@@@ :@@@-    .@*
             :@@@= #@@@@# +@@@@@@% -@=
-                  #@@@@@@+ *@@@@@@* +@:
+                  #@@@@@@+ @@@@@@ +@:
 """
-
 
 class ChatUI:
     """Presentation layer for terminal chat and status rendering."""
 
-    def __init__(self, agent_name: str, tools: Iterable[str]) -> None:
+    def _init_(self, agent_name: str, tools: Iterable[str]) -> None:
         self.console = Console()
         self.agent_name = agent_name
         self.tools = list(tools)
@@ -35,10 +41,10 @@ class ChatUI:
         self.console.print(Text(LOGO, style="bold #D97757"))
 
         details = (
-            "[bold #F3F4F6]AMEX FRAUD OPS ASSISTANT[/bold #F3F4F6]\n"
-            "[dim]Claude Code-inspired terminal UI · built for focused, high-signal work[/dim]\n\n"
-            "[bold #D1D5DB]Mode[/bold #D1D5DB]: Interactive HITL\n"
-            f"[bold #D1D5DB]Tools[/bold #D1D5DB]: {', '.join(self.tools)}"
+            "[bold #5C87DB]AMEX FRAUD OPS ASSISTANT[/bold #5C87DB]\n"
+            "[dim][/dim]\n\n"
+            "[bold #5C87DB]Mode[/bold #5C87DB]: Interactive HITL\n"
+            f"[bold #5C87DB]Tools[/bold #5C87DB]: {', '.join(self.tools)}"
         )
         self.console.print(
             Panel(
@@ -52,7 +58,7 @@ class ChatUI:
     def user_message(self, message: str) -> None:
         self.console.print(
             Panel(
-                Text(message, style="#E5E7EB"),
+                Text(message, style="#0A0A0A"),
                 title="[bold #9CA3AF]you[/bold #9CA3AF]",
                 title_align="left",
                 border_style="#4B5563",
@@ -63,7 +69,7 @@ class ChatUI:
         self.last_agent_message = message
         self.console.print(
             Panel(
-                Text(message, style="#F9FAFB"),
+                Text(message, style="#0A0A0A"),
                 title=f"[bold #D97757]{self.agent_name.lower()}[/bold #D97757]",
                 title_align="left",
                 border_style="#D97757",
