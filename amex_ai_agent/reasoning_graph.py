@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import json
-from typing import List
+from dataclasses import dataclass, field
 
 from amex_ai_agent.config import AgentConfig
 from amex_ai_agent.executor import ToolExecutor
@@ -19,17 +18,15 @@ class GraphState:
     iteration: int = 0
     tool_feedback: str = "No tool outputs yet."
     parsed: ParsedResponse | None = None
-    plan_summary: str = ""
     routing: RoutingResponse | None = None
     final_answer: str = ""
     last_tool_signature: str = ""
     repeated_tool_call_count: int = 0
-    done: bool = False
-    trace: List[str] = field(default_factory=list)
+    trace: list[str] = field(default_factory=list)
 
 
 class FraudReasoningGraph:
-    """Simple staged graph: route -> plan -> tools (loop as needed)."""
+    """Lean route -> reason -> tools loop for the CLI agent."""
 
     def __init__(
         self,
@@ -57,77 +54,61 @@ class FraudReasoningGraph:
 
     def run(self, task: str) -> GraphState:
         state = GraphState(task=task)
-        node = "route"
+        state.routing = self._route(task)
 
-        while not state.done:
-            state.trace.append(node)
-            if node == "route":
-                node = self._route_node(state)
-            elif node == "plan":
-                node = self._plan_node(state)
-            elif node == "route":
-                node = self._route_node(state)
-            elif node == "reason":
-                node = self._reason_node(state)
-            elif node == "tools":
-                node = self._tools_node(state)
-            elif node == "done":
-                state.done = True
+        for iteration in range(1, max(1, self.config.max_reasoning_loops) + 1):
+            state.iteration = iteration
+            state.trace.append(f"reason:{iteration}")
+            parsed = self._reason(task, state)
+            state.parsed = parsed
+
+            if parsed.next_action == "DONE":
+                state.final_answer = parsed.final_answer or parsed.explanation or "Task completed."
+                self.memory.add_chat("assistant", state.final_answer)
+                self.ui.agent_message(state.final_answer)
+                return state
+
+            if not parsed.tools:
+                state.final_answer = parsed.final_answer or parsed.explanation or "No tools requested."
+                self.memory.add_chat("assistant", state.final_answer)
+                self.ui.agent_message(state.final_answer)
+                return state
+
+            signature = self._tool_signature(parsed)
+            if signature and signature == state.last_tool_signature:
+                state.repeated_tool_call_count += 1
             else:
-                state.final_answer = f"Unknown graph node: {node}"
-                state.done = True
+                state.last_tool_signature = signature
+                state.repeated_tool_call_count = 0
 
+            if state.repeated_tool_call_count >= 1:
+                state.final_answer = "Detected repeated identical tool call. Stop or change the request."
+                self.memory.add_chat("assistant", state.final_answer)
+                self.ui.error(state.final_answer)
+                return state
+
+            state.tool_feedback = self._run_tools(parsed)
+
+        state.final_answer = (
+            f"Reached max planning iterations ({self.config.max_reasoning_loops}). "
+            "Review /memory and run /reason again if needed."
+        )
+        self.ui.error(state.final_answer)
         return state
 
-    def _route_node(self, state: GraphState) -> str:
-        prompt = self.planner.build_routing_prompt(
-            task=state.task,
-            intent_analysis=state.plan_summary or "No intent analysis available yet.",
-        )
+    def _route(self, task: str) -> RoutingResponse:
+        prompt = self.planner.build_routing_prompt(task=task, intent_analysis="Initial request")
         self.memory.add_chat("agent", prompt)
         response = self.llm.invoke(prompt, label="routing-stage")
         self.memory.add_chat("assistant_raw", f"[routing]\n{response}")
-
         routing = self.parser.parse_routing(response)
-        state.routing = routing
         route = routing.task_type if routing.task_type in {"conversation", "evaluate", "execute"} else "execute"
         self.ui.agent_message(f"Route selected: {route}")
-        return "plan"
+        return routing
 
-    def _plan_node(self, state: GraphState) -> str:
+    def _reason(self, task: str, state: GraphState) -> ParsedResponse:
         prompt = self.planner.build_plan_prompt(
-            task=state.task,
-            memory_context=self.memory.context_text(max_items=20),
-        )
-        self.memory.add_chat("agent", prompt)
-        response = self.llm.invoke(prompt, label="plan-stage")
-        self.memory.add_chat("assistant_raw", f"[plan]\n{response}")
-
-        parsed = self.parser.parse(response)
-        state.plan_summary = "; ".join(parsed.plan[:3]) or parsed.explanation or "No plan"
-        self.memory.add_task_summary(state.plan_summary)
-
-        plan_text = "\n".join(f"{idx+1}. {step}" for idx, step in enumerate(parsed.plan)) or "No PLAN section parsed."
-        self.ui.agent_message(f"Plan parsed:\n{plan_text}")
-        return "route"
-
-    def _route_node(self, state: GraphState) -> str:
-        prompt = self.planner.build_routing_prompt(task=state.task, intent_analysis=state.plan_summary)
-        self.memory.add_chat("agent", prompt)
-        response = self.llm.invoke(prompt, label="routing-stage")
-        self.memory.add_chat("assistant_raw", f"[routing]\n{response}")
-
-        routing = self.parser.parse_routing(response)
-        state.routing = routing
-        route = routing.task_type if routing.task_type in {"conversation", "evaluate", "execute"} else "execute"
-        self.ui.agent_message(f"Route selected: {route}")
-
-        return "reason"
-
-    def _reason_node(self, state: GraphState) -> str:
-        state.iteration += 1
-        prompt = self.planner.build_plan_prompt(
-            task=state.task,
+            task=task,
             memory_context=self.memory.context_text(max_items=20),
             routing=state.routing,
             iteration=state.iteration,
@@ -138,78 +119,27 @@ class FraudReasoningGraph:
         self.memory.add_chat("assistant_raw", f"[plan-{state.iteration}]\n{response}")
 
         parsed = self.parser.parse(response)
-        state.parsed = parsed
-        state.plan_summary = "; ".join(parsed.plan[:3]) or parsed.explanation or "No plan"
-        self.memory.add_task_summary(state.plan_summary)
+        plan_summary = "; ".join(parsed.plan[:3]) or parsed.explanation or "No plan"
+        self.memory.add_task_summary(plan_summary)
 
-        plan_text = "\n".join(f"{idx+1}. {step}" for idx, step in enumerate(parsed.plan)) or "No PLAN section parsed."
+        plan_text = "\n".join(f"{idx + 1}. {step}" for idx, step in enumerate(parsed.plan)) or "No PLAN section parsed."
         self.ui.agent_message(f"Plan parsed:\n{plan_text}\n\nNEXT_ACTION: {parsed.next_action}")
+        return parsed
 
-        if parsed.next_action == "DONE":
-            state.final_answer = parsed.final_answer or parsed.explanation or "Task completed."
-            self.memory.add_chat("assistant", state.final_answer)
-            self.ui.agent_message(state.final_answer)
-            return "done"
-
-        if state.iteration >= max(1, self.config.max_reasoning_loops):
-            state.final_answer = (
-                f"Reached max planning iterations ({self.config.max_reasoning_loops}). "
-                "Review /memory and run /reason again if needed."
-            )
-            self.ui.error(state.final_answer)
-            return "done"
-
-        if not parsed.tools:
-            route = state.routing.task_type if state.routing else "execute"
-            if route in {"conversation", "evaluate"}:
-                state.final_answer = parsed.final_answer or parsed.explanation or "Task completed."
-                self.memory.add_chat("assistant", state.final_answer)
-                self.ui.agent_message(state.final_answer)
-                return "done"
-
-            state.final_answer = parsed.explanation or "No tools requested and task is not marked DONE."
-            self.memory.add_chat("assistant", state.final_answer)
-            self.ui.error(state.final_answer)
-            return "done"
-
-        signature = self._tool_signature(parsed)
-        if signature and signature == state.last_tool_signature:
-            state.repeated_tool_call_count += 1
-        else:
-            state.last_tool_signature = signature
-            state.repeated_tool_call_count = 0
-
-        if state.repeated_tool_call_count >= 1:
-            state.final_answer = (
-                "Detected repeated identical tool call with unchanged request. "
-                "Please provide the next step explicitly (e.g., call model_score/compute_metrics) "
-                "or mark task as DONE to avoid execution loop."
-            )
-            self.memory.add_chat("assistant", state.final_answer)
-            self.ui.error(state.final_answer)
-            return "done"
-
-        return "tools"
-
-    def _tools_node(self, state: GraphState) -> str:
-        if not state.parsed or not state.parsed.tools:
-            state.tool_feedback = "No tool calls found in parsed response."
-            self.ui.tool_log(state.tool_feedback)
-            return "plan"
-
-        tool_names = ", ".join(call.name for call in state.parsed.tools)
+    def _run_tools(self, parsed: ParsedResponse) -> str:
+        tool_names = ", ".join(call.name for call in parsed.tools)
         self.ui.info(f"Running tool(s): {tool_names}")
-        self.ui.loading_timer(seconds=10, label="Still working on it")
-        results = self.executor.execute(state.parsed.tools)
-        rendered_results: List[str] = []
+
+        with self.ui.live_status("Tool run starting...") as status:
+            results = self.executor.execute(parsed.tools, progress_callback=status.update)
+
+        rendered_results: list[str] = []
         for result in results:
-            self.ui.info(f"Completed: {result.tool} ({result.status})")
             self.memory.add_tool_run(result.tool, "", result.output, result.status)
             rendered_results.append(f"[{result.tool}] ({result.status})\n{result.output}")
-            if result.status == "success":
+            if result.status in {"completed", "ready", "success", "not_ready", "needs_user_input"}:
                 self.ui.tool_log(f"[tool={result.tool}]\n{result.output}")
             else:
                 self.ui.error(f"[tool={result.tool}] ERROR: {result.output}")
 
-        state.tool_feedback = "\n\n".join(rendered_results) if rendered_results else "No tool results."
-        return "reason"
+        return "\n\n".join(rendered_results) if rendered_results else "No tool results."

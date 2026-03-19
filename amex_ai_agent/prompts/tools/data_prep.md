@@ -2,9 +2,10 @@ TOOL: data_prep
 Use when data must be prepared before scoring/analysis.
 
 Expected argument object:
-{{"start_dt":"YYYY-MM-DD","end_dt":"YYYY-MM-DD","model":"rnn|xgboost|ensemble","sample_rate":0.025}}
+{{"start_dt":"YYYY-MM-DD","end_dt":"YYYY-MM-DD","model":"rnn|xgboost|ensemble","sample_rate":0.025,"folder_nm":"optional"}}
 
 Rules:
 - Extract parameters from user request before calling.
 - Ask concise follow-up if start_dt/end_dt/model are missing.
+- project_id and dataset_id may come from startup defaults; if unavailable, ask for them.
 - sample_rate defaults to 0.025 when omitted.
