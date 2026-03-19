@@ -15,6 +15,10 @@ LOGGER = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parents[2] / "rnn_data_prep"
 SPARK_PYTHON_FALLBACK = "/opt/conda/miniconda3/bin/python"
 
+def _report(context: ToolExecutionContext | None, message: str) -> None:
+    LOGGER.info(message)
+    if context is not None:
+        context.report_progress(message)
 
 def _report(context: ToolExecutionContext | None, message: str) -> None:
     LOGGER.info(message)
