@@ -134,7 +134,8 @@ def run_pipeline(
 
     _emit("Creating RNN sequences...", progress_callback)
     output_path = f"gs://{project_id}/rnd/{dataset_id}/sally-cat/{folder_nm}/{folder_nm}_rnn_training_data"
-    final_df = prep_utils.rnn_data_seq_final(
+    _emit("Writing dataset...", progress_callback)
+    prep_utils.rnn_data_seq_final(
         base=base,
         data=df_bucket,
         df_sample_cas_pkeys=df_sample_cas_pkeys,
@@ -142,12 +143,9 @@ def run_pipeline(
         spark=spark,
     )
 
-    _emit("Writing dataset...", progress_callback)
-    final_df.write.mode("overwrite").csv(output_path)
-
     return {
         "message": "RNN dataset created successfully.",
-        "output_path": output_path,
+        "output_path": f"{output_path}/data",
         "tables": ", ".join([init_table, exclusions_table, seq_table, vars_table]),
     }
 
