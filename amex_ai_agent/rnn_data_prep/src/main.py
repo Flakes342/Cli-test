@@ -33,6 +33,24 @@ def _load_sql(name: str) -> str:
     return (BASE_DIR / "sqlQ" / name).read_text(encoding="utf-8")
 
 
+def _spark_python() -> str:
+    return os.environ.get("RNN_SPARK_PYTHON") or os.environ.get("PYSPARK_PYTHON") or sys.executable
+
+
+def _build_spark_session() -> SparkSession:
+    spark_python = _spark_python()
+    os.environ["RNN_SPARK_PYTHON"] = spark_python
+    os.environ["PYSPARK_PYTHON"] = spark_python
+    os.environ["PYSPARK_DRIVER_PYTHON"] = spark_python
+
+    return (
+        SparkSession.builder.appName("rnn_data_prep")
+        .config("spark.pyspark.python", spark_python)
+        .config("spark.pyspark.driver.python", spark_python)
+        .getOrCreate()
+    )
+
+
 def run_pipeline(
     start_dt: str,
     end_dt: str,
@@ -42,7 +60,7 @@ def run_pipeline(
     folder_nm: str = "",
     progress_callback: ProgressCallback = None,
 ) -> dict[str, str]:
-    spark = SparkSession.builder.appName("rnn_data_prep").getOrCreate()
+    spark = _build_spark_session()
     spark.conf.set("viewsEnabled", "true")
     if dataset_id:
         spark.conf.set("materializationDataset", dataset_id)

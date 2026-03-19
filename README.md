@@ -14,8 +14,10 @@ mamba activate amex-ai-agent
 
 - prompts once for default `project_id` and `dataset_id`
 - stores those defaults in `config.yaml`
-- sets `RNN_SPARK_PYTHON` from config so you do not need a separate export step
+- sets `RNN_SPARK_PYTHON`, `PYSPARK_PYTHON`, and `PYSPARK_DRIVER_PYTHON` from config so you do not need separate export steps
 - can optionally launch `gcloud auth login`
+
+If your environment prefers shell-invoked scripts, `bash ./sally run` works too.
 
 ## Helpful commands
 

@@ -33,7 +33,7 @@ class StartupManager:
             required=False,
         ) or resolved.spark_python
 
-        os.environ["RNN_SPARK_PYTHON"] = resolved.spark_python
+        self._apply_python_env(resolved.spark_python)
         self.loader.save(resolved)
 
         if prompt_for_auth:
@@ -54,6 +54,12 @@ class StartupManager:
             return
 
         subprocess.run(["gcloud", "auth", "login"], check=False)
+
+    @staticmethod
+    def _apply_python_env(python_path: str) -> None:
+        os.environ["RNN_SPARK_PYTHON"] = python_path
+        os.environ["PYSPARK_PYTHON"] = python_path
+        os.environ["PYSPARK_DRIVER_PYTHON"] = python_path
 
     def _prompt(self, label: str, default: str = "", required: bool = True) -> str:
         while True:

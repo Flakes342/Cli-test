@@ -15,6 +15,10 @@ LOGGER = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parents[2] / "rnn_data_prep"
 SPARK_PYTHON_FALLBACK = "/opt/conda/miniconda3/bin/python"
 
+def _report(context: ToolExecutionContext | None, message: str) -> None:
+    LOGGER.info(message)
+    if context is not None:
+        context.report_progress(message)
 
 def _report(context: ToolExecutionContext | None, message: str) -> None:
     LOGGER.info(message)
@@ -33,12 +37,24 @@ def _build_config(params: dict[str, Any]) -> RNNDataPrepConfig:
     )
 
 
+def _spark_python() -> str:
+    return os.getenv("RNN_SPARK_PYTHON") or os.getenv("PYSPARK_PYTHON") or SPARK_PYTHON_FALLBACK
+
+
+def _apply_spark_env(env: dict[str, str], spark_python: str) -> dict[str, str]:
+    env["RNN_SPARK_PYTHON"] = spark_python
+    env["PYSPARK_PYTHON"] = spark_python
+    env["PYSPARK_DRIVER_PYTHON"] = spark_python
+    return env
+
+
 def _try_import_execution(cfg: RNNDataPrepConfig, context: ToolExecutionContext | None) -> dict[str, Any]:
     if not REPO_ROOT.exists():
         raise FileNotFoundError(f"RNN pipeline folder not found: {REPO_ROOT}")
 
     sys.path.insert(0, str(REPO_ROOT))
     sys.path.insert(0, str(REPO_ROOT / "src"))
+    _apply_spark_env(os.environ, _spark_python())
     _report(context, "Loading RNN data prep pipeline...")
 
     from src.main import run_pipeline  # type: ignore
@@ -67,8 +83,8 @@ def _try_subprocess_execution(cfg: RNNDataPrepConfig, context: ToolExecutionCont
     if not main_py.exists():
         raise FileNotFoundError(f"Pipeline entrypoint not found: {main_py}")
 
-    spark_python = os.getenv("RNN_SPARK_PYTHON", SPARK_PYTHON_FALLBACK)
-    env = os.environ.copy()
+    spark_python = _spark_python()
+    env = _apply_spark_env(os.environ.copy(), spark_python)
     env.update(
         {
             "START_DT": cfg.start_dt,
@@ -77,7 +93,6 @@ def _try_subprocess_execution(cfg: RNNDataPrepConfig, context: ToolExecutionCont
             "PROJECT_ID": cfg.project_id,
             "DATASET_ID": cfg.dataset_id,
             "FOLDER_NM": cfg.folder_nm,
-            "RNN_SPARK_PYTHON": spark_python,
         }
     )
 
@@ -131,7 +146,7 @@ def run_rnn_data_prep(
     try:
         return _try_import_execution(cfg, context)
     except Exception as import_exc:  # noqa: BLE001
-        LOGGER.exception("Import execution failed for RNN data prep.")
+        LOGGER.info("Import execution unavailable for RNN data prep: %s", import_exc)
         try:
             return _try_subprocess_execution(cfg, context)
         except Exception as subprocess_exc:  # noqa: BLE001
