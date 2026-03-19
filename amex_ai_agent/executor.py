@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any
 
+from amex_ai_agent.config import AgentConfig
 from amex_ai_agent.parser import ToolCall
+from amex_ai_agent.tools.base import ToolExecutionContext
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -19,16 +23,12 @@ class ToolResult:
 
 
 class ToolExecutor:
-    """Executes tool calls against a modular registry."""
+    """Executes enabled tool calls against a modular registry."""
 
     REGISTRY = {
         "data_prep": "amex_ai_agent.tools.data_prep",
         "model_score": "amex_ai_agent.tools.model_score",
-        "rca_analysis": "amex_ai_agent.tools.rca_analysis",
-        "case_review": "amex_ai_agent.tools.case_review",
-        "alert_rationalization": "amex_ai_agent.tools.alerts",
         "compute_metrics": "amex_ai_agent.tools.metrics",
-        "generate_ppt": "amex_ai_agent.tools.ppt_generator",
     }
 
     ALIASES = {
@@ -36,35 +36,61 @@ class ToolExecutor:
         "score_model": "model_score",
     }
 
-    def list_tools(self) -> List[str]:
+    def __init__(self, config: AgentConfig) -> None:
+        self.config = config
+
+    def list_tools(self) -> list[str]:
         return sorted(self.REGISTRY.keys())
 
     def resolve_tool_name(self, name: str) -> str:
         candidate = (name or "").strip()
         return self.ALIASES.get(candidate, candidate)
 
-    def execute(self, calls: List[ToolCall]) -> List[ToolResult]:
-        results: List[ToolResult] = []
+    def execute(
+        self,
+        calls: list[ToolCall],
+        progress_callback: Any = None,
+    ) -> list[ToolResult]:
+        results: list[ToolResult] = []
+        defaults = {
+            "project_id": self.config.default_project_id,
+            "dataset_id": self.config.default_dataset_id,
+            "folder_nm": self.config.default_folder_nm,
+            "spark_python": self.config.spark_python,
+        }
+
         for call in calls:
             canonical_name = self.resolve_tool_name(call.name)
             if canonical_name not in self.REGISTRY:
                 results.append(ToolResult(call.name, "error", "Tool not registered"))
                 continue
 
+            display_name = call.name if call.name == canonical_name else f"{call.name}->{canonical_name}"
+            tool_logger = logging.getLogger(f"amex_ai_agent.tools.{canonical_name}")
+            context = ToolExecutionContext(
+                logger=tool_logger,
+                defaults=defaults,
+                progress_callback=progress_callback,
+            )
+
             try:
                 module = importlib.import_module(self.REGISTRY[canonical_name])
-                output: Dict[str, Any] = module.run(call.argument)
+                run_signature = inspect.signature(module.run)
+                if "context" in run_signature.parameters:
+                    output: dict[str, Any] = module.run(call.argument, context=context)
+                else:
+                    output = module.run(call.argument)
+
                 rendered = json.dumps(output, indent=2, default=str)
-                display_name = call.name if call.name == canonical_name else f"{call.name}->{canonical_name}"
-                results.append(ToolResult(display_name, "success", rendered))
+                status = str(output.get("status", "success"))
+                results.append(ToolResult(display_name, status, rendered))
             except Exception as exc:  # noqa: BLE001
                 LOGGER.exception("Tool execution failed: %s", canonical_name)
-                results.append(ToolResult(canonical_name, "error", str(exc)))
+                results.append(ToolResult(display_name, "error", str(exc)))
         return results
 
-    def validate_registry(self) -> Dict[str, str]:
-        """Return registry validation results keyed by tool name."""
-        status: Dict[str, str] = {}
+    def validate_registry(self) -> dict[str, str]:
+        status: dict[str, str] = {}
         for tool, module_path in self.REGISTRY.items():
             try:
                 importlib.import_module(module_path)

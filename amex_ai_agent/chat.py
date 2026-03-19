@@ -44,7 +44,7 @@ class AgentChatApp:
         self.memory = MemoryStore()
         self.planner = PromptPlanner()
         self.parser = ResponseParser()
-        self.executor = ToolExecutor()
+        self.executor = ToolExecutor(config)
         self.ui = ChatUI(config.agent_name, self.executor.list_tools())
         self.last_task: str = ""
 
@@ -123,7 +123,7 @@ class AgentChatApp:
             "Setup hint:\n"
             "1) mamba env create -f environment.yml\n"
             "2) mamba activate amex-ai-agent\n"
-            "3) python agent.py"
+            "3) ./sally run"
         )
 
     def _handle_command(self, command: str) -> bool:

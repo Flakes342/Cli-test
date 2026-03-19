@@ -1,68 +1,59 @@
-# from _future_ import annotations
+from __future__ import annotations
 
-# import os
-# import subprocess
-# import sys
-# import traceback
-# from pathlib import Path
-# from typing import Any, Dict
-
-# from pipelines.rnn_data_prep.config import RNNDataPrepConfig
-
-# # Change this to wherever your extracted repo lives in your agent project
-# REPO_ROOT = Path(_file_).resolve().parents[2] / "rnn_data_prep"
-
-from _future_ import annotations
-
+import logging
 import os
 import subprocess
+import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
-from pipelines.rnn_data_prep.config import RNNDataPrepConfig
-
-REPO_ROOT = Path(_file_).resolve().parents[2] / "rnn_data_prep"
-SPARK_PYTHON = os.getenv("RNN_SPARK_PYTHON", "/opt/conda/miniconda3/bin/python")
+from amex_ai_agent.pipelines.rnn_data_prep.config import RNNDataPrepConfig
+from amex_ai_agent.tools.base import ToolExecutionContext
 
 
+LOGGER = logging.getLogger(__name__)
+REPO_ROOT = Path(__file__).resolve().parents[2] / "rnn_data_prep"
+SPARK_PYTHON_FALLBACK = "/opt/conda/miniconda3/bin/python"
 
-def _build_config(params: Dict[str, Any]) -> RNNDataPrepConfig:
+
+def _report(context: ToolExecutionContext | None, message: str) -> None:
+    LOGGER.info(message)
+    if context is not None:
+        context.report_progress(message)
+
+
+def _build_config(params: dict[str, Any]) -> RNNDataPrepConfig:
     return RNNDataPrepConfig(
         start_dt=params["start_dt"],
         end_dt=params["end_dt"],
         sample_rate=float(params.get("sample_rate", 0.025)),
-        project_id=params.get("project_id", "prj-p-ai-fraud"),
-        dataset_id=params.get("dataset_id", "atanw9"),
-        folder_nm=params.get("folder_nm", "rnn_test"),
+        project_id=str(params.get("project_id", "")).strip(),
+        dataset_id=str(params.get("dataset_id", "")).strip(),
+        folder_nm=str(params.get("folder_nm", "rnn_data_prep")).strip() or "rnn_data_prep",
     )
 
 
-def _try_import_execution(cfg: RNNDataPrepConfig) -> Dict[str, Any]:
-    """
-    Preferred path if you refactor the existing repo to expose a callable:
-        from src.main import run_pipeline
-    """
+def _spark_python() -> str:
+    return os.getenv("RNN_SPARK_PYTHON") or os.getenv("PYSPARK_PYTHON") or SPARK_PYTHON_FALLBACK
 
-    repo_src = REPO_ROOT / "src"
 
-    import sys
+def _apply_spark_env(env: dict[str, str], spark_python: str) -> dict[str, str]:
+    env["RNN_SPARK_PYTHON"] = spark_python
+    env["PYSPARK_PYTHON"] = spark_python
+    env["PYSPARK_DRIVER_PYTHON"] = spark_python
+    return env
+
+
+def _try_import_execution(cfg: RNNDataPrepConfig, context: ToolExecutionContext | None) -> dict[str, Any]:
+    if not REPO_ROOT.exists():
+        raise FileNotFoundError(f"RNN pipeline folder not found: {REPO_ROOT}")
+
     sys.path.insert(0, str(REPO_ROOT))
-    sys.path.insert(0, str(repo_src))
+    sys.path.insert(0, str(REPO_ROOT / "src"))
+    _apply_spark_env(os.environ, _spark_python())
+    _report(context, "Loading RNN data prep pipeline...")
 
-    from src.main import run_pipeline
-    if not repo_src.exists():
-        raise FileNotFoundError(f"Repo src directory not found: {repo_src}")
-
-    sys.path.insert(0, str(REPO_ROOT))
-
-    try:
-        # You should add this function to your repo's src/main.py
-        from src.main import run_pipeline  # type: ignore
-    except Exception as exc:
-        raise ImportError(
-            "Could not import run_pipeline from src.main. "
-            "Refactor your existing repo to expose run_pipeline(...)."
-        ) from exc
+    from src.main import run_pipeline  # type: ignore
 
     pipeline_result = run_pipeline(
         start_dt=cfg.start_dt,
@@ -71,73 +62,96 @@ def _try_import_execution(cfg: RNNDataPrepConfig) -> Dict[str, Any]:
         project_id=cfg.project_id,
         dataset_id=cfg.dataset_id,
         folder_nm=cfg.folder_nm,
+        progress_callback=context.report_progress if context else None,
     )
 
     return {
         "status": "completed",
         "pipeline": "rnn_data_prep",
         "execution_mode": "python_import",
-        "parameters": cfg._dict_,
+        "parameters": cfg.to_dict(),
         "result": pipeline_result,
     }
 
 
-def _try_subprocess_execution(cfg: RNNDataPrepConfig) -> Dict[str, Any]:
+def _try_subprocess_execution(cfg: RNNDataPrepConfig, context: ToolExecutionContext | None) -> dict[str, Any]:
     main_py = REPO_ROOT / "src" / "main.py"
     if not main_py.exists():
         raise FileNotFoundError(f"Pipeline entrypoint not found: {main_py}")
 
-    env = os.environ.copy()
-    env["START_DT"] = cfg.start_dt
-    env["END_DT"] = cfg.end_dt
-    env["SAMPLE_RATE"] = str(cfg.sample_rate)
-    env["PROJECT_ID"] = cfg.project_id
-    env["DATASET_ID"] = cfg.dataset_id
-    env["FOLDER_NM"] = cfg.folder_nm
+    spark_python = _spark_python()
+    env = _apply_spark_env(os.environ.copy(), spark_python)
+    env.update(
+        {
+            "START_DT": cfg.start_dt,
+            "END_DT": cfg.end_dt,
+            "SAMPLE_RATE": str(cfg.sample_rate),
+            "PROJECT_ID": cfg.project_id,
+            "DATASET_ID": cfg.dataset_id,
+            "FOLDER_NM": cfg.folder_nm,
+        }
+    )
 
-    process = subprocess.run(
-        [SPARK_PYTHON, str(main_py)],
+    _report(context, "Falling back to subprocess execution...")
+    process = subprocess.Popen(
+        [spark_python, str(main_py)],
         cwd=str(REPO_ROOT),
         env=env,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
-        check=False,
     )
+
+    output_lines: list[str] = []
+    assert process.stdout is not None
+    for line in process.stdout:
+        message = line.rstrip()
+        if not message:
+            continue
+        output_lines.append(message)
+        _report(context, message)
+
+    process.wait()
+    combined_output = "\n".join(output_lines)[-4000:]
 
     if process.returncode != 0:
         return {
             "status": "failed",
             "pipeline": "rnn_data_prep",
             "execution_mode": "subprocess",
-            "parameters": cfg._dict_,
+            "parameters": cfg.to_dict(),
             "return_code": process.returncode,
-            "stdout": process.stdout[-4000:],
-            "stderr": process.stderr[-4000:],
+            "stdout": combined_output,
         }
 
     return {
         "status": "completed",
         "pipeline": "rnn_data_prep",
         "execution_mode": "subprocess",
-        "parameters": cfg._dict_,
-        "stdout": process.stdout[-4000:],
+        "parameters": cfg.to_dict(),
+        "stdout": combined_output,
     }
 
-def run_rnn_data_prep(params: Dict[str, Any]) -> Dict[str, Any]:
+
+def run_rnn_data_prep(
+    params: dict[str, Any],
+    context: ToolExecutionContext | None = None,
+) -> dict[str, Any]:
     cfg = _build_config(params)
 
     try:
-        return _try_import_execution(cfg)
-    except Exception as import_exc:
+        return _try_import_execution(cfg, context)
+    except Exception as import_exc:  # noqa: BLE001
+        LOGGER.info("Import execution unavailable for RNN data prep: %s", import_exc)
         try:
-            return _try_subprocess_execution(cfg)
-        except Exception as subprocess_exc:
+            return _try_subprocess_execution(cfg, context)
+        except Exception as subprocess_exc:  # noqa: BLE001
+            LOGGER.exception("Subprocess execution failed for RNN data prep.")
             return {
                 "status": "failed",
                 "pipeline": "rnn_data_prep",
-                "parameters": cfg._dict_,
+                "parameters": cfg.to_dict(),
                 "message": "Failed to execute RNN data prep pipeline.",
                 "import_execution_error": str(import_exc),
                 "subprocess_execution_error": str(subprocess_exc),
-                "traceback": traceback.format_exc()[-6000:],
             }

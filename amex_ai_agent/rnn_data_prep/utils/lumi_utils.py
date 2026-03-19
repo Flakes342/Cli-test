@@ -5,7 +5,7 @@ from typing import Optional
 from google.api_core.exceptions import NotFound, GoogleAPICallError
 from google.cloud.bigquery import Client, QueryJobConfig
 
-logger = logging.getLogger(_name_)
+logger = logging.getLogger(__name__)
 client = Client()
 
 # Poll interval for long-running queries

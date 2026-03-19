@@ -1,7 +1,11 @@
-agent_name: SallyCat
+agent_name: Sally
 theme: dark
 memory_enabled: true
 auto_execute_tools: false
 max_reasoning_loops: 5
 llm_mode: manual
 llm_model:
+default_project_id:
+default_dataset_id:
+default_folder_nm: rnn_data_prep
+spark_python: /opt/conda/miniconda3/bin/python

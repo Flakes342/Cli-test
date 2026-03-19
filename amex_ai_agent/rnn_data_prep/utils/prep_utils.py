@@ -20,7 +20,7 @@ from pyspark.sql.functions import (
 )
 from pyspark.sql.types import DateType, StringType, IntegerType, DoubleType
 
-logger = logging.getLogger(_name_)
+logger = logging.getLogger(__name__)
 if not logger.handlers:
     logging.basicConfig(
         level=logging.INFO,
