@@ -1,6 +1,6 @@
 # Sally
 
-Sally is a local-first CLI assistant for fraud workflows in restricted environments. Right now the only wired execution path is the RNN data-prep pipeline; other tool scaffolding has been trimmed back so the agent behavior stays predictable.
+Sally is a local-first CLI assistant for fraud workflows in restricted environments. Right now the most mature execution paths are the RNN data-prep pipeline plus a CSV-backed variable catalog lookup flow for analysts who need variable definitions and discovery.
 
 ## Quick start
 
@@ -16,6 +16,7 @@ mamba activate amex-ai-agent
 - stores those defaults in `config.yaml`
 - sets `RNN_SPARK_PYTHON`, `PYSPARK_PYTHON`, and `PYSPARK_DRIVER_PYTHON` from config so you do not need separate export steps
 - can optionally launch `gcloud auth login`
+- can store a `variable_catalog_path` that points to a CSV with `Variable`, `Full Name`, `Description`, `Table`, `Domain`, and `Model` columns
 
 If your environment prefers shell-invoked scripts, `bash ./sally run` works too.
 
@@ -24,6 +25,37 @@ If your environment prefers shell-invoked scripts, `bash ./sally run` works too.
 - `./sally init` — collect/update startup defaults without launching the chat UI
 - `./sally doctor` — print saved startup configuration
 - `python agent.py` — legacy entrypoint if you do not want the bootstrap wrapper
+- `/var <code>` — show the exact variable definition from the configured catalog
+- `/vars model <model>` — list variables for a model
+- `/vars domain <domain>` — list variables for a domain
+
+## Variable catalog format
+
+Point `variable_catalog_path` at a CSV file with these headers:
+
+- `Variable`
+- `Full Name`
+- `Description`
+- `Table`
+- `Domain`
+- `Model`
+
+The variable catalog powers both the direct chat commands and the `variable_lookup` tool. The tool supports:
+
+- exact code lookup
+- filtered listings by `model`, `domain`, and `table`
+- fuzzy text search over variable code, full name, and description
+
+Example tool argument:
+
+```json
+{
+  "query": "authorization amount",
+  "model": "rnn",
+  "domain": "authorization",
+  "limit": 5
+}
+```
 
 ## Deeper documentation
 
@@ -38,6 +70,7 @@ Enabled tools:
 - `data_prep`
 - `model_score`
 - `compute_metrics`
+- `variable_lookup`
 
 `data_prep` supports these model names:
 
@@ -59,5 +92,6 @@ During tool execution the CLI shows live in-place status updates such as:
 - `Creating init sample table...`
 - `Creating Spark dataframes...`
 - `Writing dataset...`
+- `Loading variable catalog...`
 
 The final structured tool output still prints after the live status completes.
