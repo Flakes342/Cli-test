@@ -29,11 +29,13 @@ class ToolExecutor:
         "data_prep": "amex_ai_agent.tools.data_prep",
         "model_score": "amex_ai_agent.tools.model_score",
         "compute_metrics": "amex_ai_agent.tools.metrics",
+        "variable_lookup": "amex_ai_agent.tools.variable_lookup",
     }
 
     ALIASES = {
         "metrics": "compute_metrics",
         "score_model": "model_score",
+        "var_lookup": "variable_lookup",
     }
 
     def __init__(self, config: AgentConfig) -> None:
@@ -57,6 +59,7 @@ class ToolExecutor:
             "dataset_id": self.config.default_dataset_id,
             "folder_nm": self.config.default_folder_nm,
             "spark_python": self.config.spark_python,
+            "variable_catalog_path": self.config.variable_catalog_path,
         }
 
         for call in calls:
