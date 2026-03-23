@@ -85,11 +85,12 @@ class VariableCatalog:
         model: str | None = None,
         domain: str | None = None,
         table: str | None = None,
-        limit: int = 10,
+        limit: int | None = 10,
     ) -> list[VariableRecord]:
         query = normalize_text(text)
         if not query:
-            return self.filter_records(model=model, domain=domain, table=table)[: max(limit, 0)]
+            records = self.filter_records(model=model, domain=domain, table=table)
+            return records if limit is None else records[: max(limit, 0)]
 
         scoped_records = self.filter_records(model=model, domain=domain, table=table)
         scored: list[tuple[float, VariableRecord]] = []
@@ -99,7 +100,8 @@ class VariableCatalog:
                 scored.append((score, record))
 
         scored.sort(key=lambda item: (-item[0], item[1].variable.lower()))
-        return [record for _, record in scored[: max(limit, 0)]]
+        ranked = [record for _, record in scored]
+        return ranked if limit is None else ranked[: max(limit, 0)]
 
     @staticmethod
     def _score_field(query: str, raw_value: str) -> float:
