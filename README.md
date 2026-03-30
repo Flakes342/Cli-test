@@ -88,7 +88,11 @@ Structured example:
 
 The tool resolves variable metadata from the configured variable catalog (`variable_catalog_path`), normalizes alert context/windows, produces a structured first-pass RCA package, and returns reusable SQL templates for funnel and driver checks.
 
-If you want it to run and gather data immediately, pass `execute_sql=true` and either `query` (single SQL) or `queries` (named list of SQL statements). It uses `bq query --nouse_legacy_sql --format=json` and returns rows under `sql_execution.query_results`.
+If you want it to run and gather data immediately, pass `execute_sql=true` and either `query` (single SQL) or `queries` (named list of SQL statements).
+
+If you want the tool to run its generated funnel/driver SQL, pass `execute_generated_sql=true`.
+
+It uses `bq query --nouse_legacy_sql --format=json` and returns rows under `sql_execution.query_results`.
 
 ## Deeper documentation
 

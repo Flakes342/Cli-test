@@ -64,7 +64,12 @@ def _build_alert_summary(context: AlertContext, observations: dict[str, object])
     metric_value = _to_float(observations.get("metric_value"))
     baseline_value = _to_float(observations.get("baseline_value"))
     pct_change = _pct_change(metric_value, baseline_value)
-    direction = "down" if context.alert_type in {"lower_limit_breach", "ratio_drop"} else "up"
+    if context.alert_type in {"lower_limit_breach", "ratio_drop"}:
+        direction = "down"
+    elif context.alert_type in {"upper_limit_breach", "ratio_spike", "count_alert"}:
+        direction = "up"
+    else:
+        direction = "unknown"
     return {
         "metric_value": metric_value,
         "baseline_value": baseline_value,

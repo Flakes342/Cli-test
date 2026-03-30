@@ -57,7 +57,17 @@ def _parsed_from_payload(payload: dict[str, Any], raw_text: str) -> ParsedAlertR
     alert_type = str(payload.get("alert_type", "unknown")).strip() or "unknown"
     metric_view = str(payload.get("metric_view", "unknown")).strip() or "unknown"
 
-    user_query = str(payload.get("analyst_notes") or raw_text or variable_reference)
+    if raw_text and not payload:
+        user_query = raw_text
+    else:
+        parts = [
+            f"variable_id={variable_reference}" if variable_reference else "",
+            f"alert_date={alert_date}" if alert_date else "",
+            f"alert_type={alert_type}" if alert_type and alert_type != "unknown" else "",
+            str(payload.get("analyst_notes", "") or ""),
+        ]
+        user_query = "; ".join(part for part in parts if part).strip()
+
     parsed = parse_alert_query(user_query)
     return ParsedAlertRequest(
         raw_user_query=user_query,
@@ -112,6 +122,35 @@ def _collect_generated_queries(stage_sql: str, driver_sql: dict[str, str]) -> li
     for key, sql in driver_sql.items():
         queries.append((f"driver_{key}", sql))
     return queries
+
+
+def _compact_response(full_output: dict[str, object], *, include_sql_templates: bool) -> dict[str, object]:
+    stage_rows = full_output.get("stage_diagnostics") if isinstance(full_output.get("stage_diagnostics"), list) else []
+    flagged_stages = [item for item in stage_rows if isinstance(item, dict) and item.get("flagged")]
+
+    hypotheses = full_output.get("hypotheses") if isinstance(full_output.get("hypotheses"), list) else []
+    top_hypotheses = hypotheses[:3]
+
+    compact = {
+        "tool": full_output.get("tool", "rca_analysis"),
+        "status": full_output.get("status", "success"),
+        "input_context": full_output.get("input_context", {}),
+        "resolved_variable_metadata": full_output.get("resolved_variable_metadata", {}),
+        "analysis_window": full_output.get("analysis_window", {}),
+        "baseline_window": full_output.get("baseline_window", {}),
+        "alert_summary": full_output.get("alert_summary", {}),
+        "metric_decomposition": full_output.get("metric_decomposition", {}),
+        "key_findings": {
+            "flagged_stages": flagged_stages,
+            "top_hypotheses": top_hypotheses,
+        },
+        "sql_execution": full_output.get("sql_execution", {}),
+        "analyst_summary": full_output.get("analyst_summary", ""),
+    }
+
+    if include_sql_templates:
+        compact["analysis_sql"] = full_output.get("analysis_sql", {})
+    return compact
 
 
 def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
@@ -193,7 +232,7 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
     observations = payload.get("observations") if isinstance(payload.get("observations"), dict) else {}
 
     context.report_progress("Building first-pass RCA findings...")
-    output = build_rca_output(
+    base_output = build_rca_output(
         context=context_obj,
         metadata=resolved_metadata,
         observations=observations,
@@ -202,13 +241,14 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
         driver_sql=driver_sql,
     )
 
-    execute_sql = bool(payload.get("execute_sql", False))
+    custom_queries = _collect_custom_queries(payload)
+    execute_sql = bool(payload.get("execute_sql", False) or custom_queries)
     execute_generated_sql = bool(payload.get("execute_generated_sql", False))
     executed_results: list[dict[str, object]] = []
 
     if execute_sql or execute_generated_sql:
         context.report_progress("Executing BigQuery SQL and gathering result rows...")
-        query_batch = _collect_custom_queries(payload)
+        query_batch = list(custom_queries)
         if execute_generated_sql:
             query_batch.extend(_collect_generated_queries(stage_sql, driver_sql))
 
@@ -218,7 +258,7 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
         else:
             executed_results = [{"name": "none", "status": "skipped", "row_count": 0, "rows": [], "duration_seconds": 0.0, "error": "No queries supplied."}]
 
-    return {
+    full_output = {
         "tool": "rca_analysis",
         "status": "success",
         "sql_execution": {
@@ -226,5 +266,14 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
             "execute_generated_sql": execute_generated_sql,
             "query_results": executed_results,
         },
-        **output,
+        **base_output,
     }
+
+    response_mode = str(payload.get("response_mode", "compact") or "compact").strip().lower()
+    include_sql_templates = bool(payload.get("include_sql_templates", False))
+    if response_mode == "full":
+        if not include_sql_templates and "analysis_sql" in full_output:
+            del full_output["analysis_sql"]
+        return full_output
+
+    return _compact_response(full_output, include_sql_templates=include_sql_templates)

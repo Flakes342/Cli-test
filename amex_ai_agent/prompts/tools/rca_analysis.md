@@ -18,6 +18,8 @@ Optional fields:
 - observations (precomputed metric/stage/driver stats)
 - execute_sql / execute_generated_sql
 - query or queries[] for ad-hoc SQL execution
+- response_mode: `compact` (default) or `full`
+- include_sql_templates: include raw SQL strings in response
 
 Behavior:
 - Parses variable/date/alert type from natural language.
