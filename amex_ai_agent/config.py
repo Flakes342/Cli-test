@@ -20,6 +20,7 @@ class AgentConfig:
     default_dataset_id: str = ""
     default_folder_nm: str = "rnn_data_prep"
     spark_python: str = "/opt/conda/miniconda3/bin/python"
+    variable_catalog_path: str = ""
 
 
 class ConfigLoader:
@@ -71,6 +72,7 @@ class ConfigLoader:
             default_folder_nm=data.get("default_folder_nm", "rnn_data_prep") or "rnn_data_prep",
             spark_python=data.get("spark_python", "/opt/conda/miniconda3/bin/python")
             or "/opt/conda/miniconda3/bin/python",
+            variable_catalog_path=data.get("variable_catalog_path", "") or "",
         )
 
     def save(self, config: AgentConfig) -> None:
@@ -87,6 +89,7 @@ class ConfigLoader:
                 f"default_dataset_id: {config.default_dataset_id}",
                 f"default_folder_nm: {config.default_folder_nm}",
                 f"spark_python: {config.spark_python}",
+                f"variable_catalog_path: {config.variable_catalog_path}",
             ]
         )
         self.config_path.write_text(content + "\n", encoding="utf-8")
