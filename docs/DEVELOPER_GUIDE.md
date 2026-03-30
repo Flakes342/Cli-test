@@ -36,7 +36,7 @@ Instead, it works like this:
    - executes any tool calls
    - saves tool outputs to memory
    - loops until the model returns `DONE` or the max loop count is reached
-5. Tool execution currently centers on `data_prep`, especially the RNN data-prep pipeline, plus `variable_lookup` for CSV-backed metadata lookups.
+5. Tool execution currently centers on `data_prep`, plus metadata-driven tools (`variable_lookup` and `rca_analysis`) for CDIT alert triage.
 6. Results are shown in the terminal and also logged to disk.
 
 You can think of the repo as six layers:
@@ -90,6 +90,7 @@ You can think of the repo as six layers:
 - `reasoning_graph.py` — bounded route → reason → tools loop
 - `startup.py` — interactive bootstrap, config persistence, env var setup
 - `variable_catalog.py` — CSV-backed variable metadata loader, normalizer, and search helper
+- `rca/` — reusable CDIT variable-alert RCA components (parser, normalizer, resolver, SQL builders, analysis logic)
 
 ### UI package: `amex_ai_agent/ui/`
 
@@ -104,6 +105,7 @@ Currently active or core:
 - `model_score.py`
 - `metrics.py`
 - `variable_lookup.py`
+- `rca_analysis.py`
 - `base.py`
 
 Other existing but not currently wired into the active tool registry:
@@ -141,6 +143,11 @@ Other existing but not currently wired into the active tool registry:
 
 - `tests/test_variable_catalog.py`
 - `tests/test_variable_lookup_tool.py`
+- `tests/test_alert_query_parser.py`
+- `tests/test_variable_metadata_resolver.py`
+- `tests/test_rca_sql_templates.py`
+- `tests/test_rca_analysis_logic.py`
+- `tests/test_rca_analysis_tool.py`
 
 ---
 
@@ -227,6 +234,38 @@ variable_lookup.run(...)
 ```
 
 The direct chat commands `/var <code>`, `/vars model <model>`, and `/vars domain <domain>` reuse the same catalog layer without invoking the LLM.
+
+---
+
+
+## 3.5 CDIT variable-alert RCA flow
+
+When an analyst asks for an RCA like "RDMC3048 lower-limit alert":
+
+```text
+rca_analysis.run(...)
+  -> parse natural-language alert request (variable/date/type/metric)
+  -> resolve variable metadata from variable_catalog_path
+  -> normalize analysis/baseline windows
+  -> construct stage-funnel + driver SQL templates
+  -> compute structured first-pass RCA output
+     (alert summary, decomposition, stage diagnostics, DQ checks, hypotheses, analyst summary)
+```
+
+Implementation modules:
+
+- `rca/alert_query_parser.py`
+- `rca/variable_metadata_resolver.py`
+- `rca/alert_context_normalizer.py`
+- `rca/sql_templates.py`
+- `rca/analysis.py`
+
+The design keeps parsing, metadata resolution, SQL generation, and findings logic independent so new variables and additional RCA checks can be added without rewriting the tool wrapper.
+
+`rca_analysis` also supports optional SQL execution for data gathering:
+- `execute_sql=true` with `query` or `queries` executes ad-hoc SQL.
+- `execute_generated_sql=true` executes the generated stage-funnel and driver SQL templates.
+- Query execution follows the repo logger pattern and calls `bq query --nouse_legacy_sql --format=json`, returning rows in the tool output.
 
 ---
 

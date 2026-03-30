@@ -1,6 +1,6 @@
 # Sally
 
-Sally is a local-first CLI assistant for fraud workflows in restricted environments. Right now the most mature execution paths are the RNN data-prep pipeline plus a CSV-backed variable catalog lookup flow for analysts who need variable definitions and discovery.
+Sally is a local-first CLI assistant for fraud workflows in restricted environments. Right now the most mature execution paths are the RNN data-prep pipeline, a CSV-backed variable catalog lookup flow, and an initial CDIT variable-alert RCA tool for analyst triage.
 
 ## Quick start
 
@@ -57,6 +57,39 @@ Example tool argument:
 }
 ```
 
+
+## CDIT variable-alert RCA tool
+
+Sally now includes `rca_analysis` for first-pass CDIT/control-chart investigations.
+
+Where it lives:
+
+- Tool entrypoint: `amex_ai_agent/tools/rca_analysis.py`
+- RCA components: `amex_ai_agent/rca/`
+
+Natural-language example:
+
+```json
+{
+  "user_query": "RDMC3048 got a lower-limit alert on 2026-03-22. Please do initial RCA."
+}
+```
+
+Structured example:
+
+```json
+{
+  "variable_id": "RDMC3048",
+  "alert_date": "2026-03-22",
+  "alert_type": "lower_limit_breach",
+  "sample_rate_override": 0.025
+}
+```
+
+The tool resolves variable metadata from the configured variable catalog (`variable_catalog_path`), normalizes alert context/windows, produces a structured first-pass RCA package, and returns reusable SQL templates for funnel and driver checks.
+
+If you want it to run and gather data immediately, pass `execute_sql=true` and either `query` (single SQL) or `queries` (named list of SQL statements). It uses `bq query --nouse_legacy_sql --format=json` and returns rows under `sql_execution.query_results`.
+
 ## Deeper documentation
 
 For a code-level walkthrough of the full repository, see:
@@ -71,6 +104,7 @@ Enabled tools:
 - `model_score`
 - `compute_metrics`
 - `variable_lookup`
+- `rca_analysis`
 
 `data_prep` supports these model names:
 
