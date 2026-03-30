@@ -20,6 +20,7 @@ case_review(case_json_or_notes)
 alert_rationalization(alert_csv_path_or_instruction)
 compute_metrics(model_scoring_csv_path)
 generate_ppt(summary_text)
+variable_lookup(json_query)
 
 Return JSON with this schema:
 {{
@@ -129,6 +130,7 @@ Available tool names:
 - alert_rationalization
 - compute_metrics
 - generate_ppt
+- variable_lookup
 
 Instructions:
 - Think stepwise and choose only necessary tools.

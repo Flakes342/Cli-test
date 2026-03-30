@@ -41,6 +41,7 @@ Use only these exact tool names:
 - alert_rationalization
 - compute_metrics
 - generate_ppt
+- variable_lookup
 
 ---
 
@@ -54,6 +55,7 @@ Use only these exact tool names:
 - For route `conversation` or `evaluate`, prefer replying directly with `next_action`=`DONE` and a clear `final_answer` unless execution is explicitly requested.
 - If more work is needed, set `next_action` to `CONTINUE` and provide tool calls when execution is required.
 - Follow any appended TOOL-SPECIFIC GUIDANCE section when present.
+- Use `variable_lookup` for variable definitions, catalog searches, and model/domain/table variable listings when relevant.
 
 ---
 
