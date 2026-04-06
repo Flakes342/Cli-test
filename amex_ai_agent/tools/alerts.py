@@ -82,6 +82,7 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
         }
 
     variable_id = str(payload.get("variable_id") or (resolved_variable or {}).get("variable_id") or reference).strip()
+    sql_metric_name = str(payload.get("variable_name") or (resolved_variable or {}).get("variable_name") or variable_id).strip()
     alert_date = str(payload.get("alert_date") or parsed.alert_date or "")
     start_date = str(payload.get("start_date") or alert_date)
     end_date = str(payload.get("end_date") or alert_date)
@@ -90,8 +91,8 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
     user_query_sql = str(payload.get("query", "") or "").strip()
 
     generated_sql = ""
-    if table_name and variable_id:
-        generated_sql = _build_default_sql(table_name=table_name, start_date=start_date, end_date=end_date, variable_id=variable_id)
+    if table_name and sql_metric_name:
+        generated_sql = _build_default_sql(table_name=table_name, start_date=start_date, end_date=end_date, variable_id=sql_metric_name)
 
     execute_sql = bool(payload.get("execute_sql", False) or user_query_sql)
     query_results: list[dict[str, object]] = []
@@ -130,6 +131,7 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
         "input_context": {
             "raw_user_query": parsed.raw_user_query,
             "variable_id": variable_id,
+            "sql_metric_name": sql_metric_name,
             "alert_date": alert_date,
             "alert_type": str(payload.get("alert_type") or parsed.alert_type),
             "metric_view": str(payload.get("metric_view") or parsed.metric_view),

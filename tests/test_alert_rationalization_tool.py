@@ -30,7 +30,7 @@ def test_alert_rationalization_returns_generated_sql(tmp_path: Path) -> None:
     result = run(json.dumps({"variable_id": "RDMC3048", "alert_date": "2026-03-22"}), context=_context(catalog))
 
     assert result["status"] == "success"
-    assert "AVG(RDMC3048)" in result["generated_sql"]
+    assert "AVG(cmmccd48_mccd30_ratio)" in result["generated_sql"]
 
 
 def test_alert_rationalization_executes_sql_when_requested(monkeypatch, tmp_path: Path) -> None:
