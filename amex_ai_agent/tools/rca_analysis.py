@@ -97,6 +97,8 @@ def _resolve_variable_metadata(
         return resolved, [metadata_to_dict(item) for item in candidates]
     return None, [metadata_to_dict(item) for item in candidates]
 
+    if include_decomp:
+        compact["metric_decomposition"] = metric_decomposition
 
 def _collect_custom_queries(payload: dict[str, Any]) -> list[tuple[str, str]]:
     queries: list[tuple[str, str]] = []
