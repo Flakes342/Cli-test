@@ -28,6 +28,7 @@ Use only these exact tool names:
 * **data_prep(instruction_or_json)**
 * **model_score(instruction_or_json)**
 * **rca_analysis(transcript_or_notes)**
+* **alert_rationalization(alert_csv_path_or_instruction)**
 * **compute_metrics(model_scoring_csv_path)**
 * **variable_lookup(instruction_or_json)**
 

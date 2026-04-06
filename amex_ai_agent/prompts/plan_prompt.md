@@ -37,6 +37,7 @@ Use only these exact tool names:
 - data_prep
 - model_score
 - rca_analysis
+- alert_rationalization
 - compute_metrics
 - variable_lookup
 
