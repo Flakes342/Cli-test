@@ -97,6 +97,26 @@ def _resolve_variable_metadata(
         return resolved, [metadata_to_dict(item) for item in candidates]
     return None, [metadata_to_dict(item) for item in candidates]
 
+    compact = {
+        "tool": full_output.get("tool", "rca_analysis"),
+        "status": full_output.get("status", "success"),
+        "input_context": full_output.get("input_context", {}),
+        "resolved_variable_metadata": full_output.get("resolved_variable_metadata", {}),
+        "analysis_window": full_output.get("analysis_window", {}),
+        "baseline_window": full_output.get("baseline_window", {}),
+        "alert_summary": full_output.get("alert_summary", {}),
+        "metric_decomposition": full_output.get("metric_decomposition", {}),
+        "key_findings": {
+            "flagged_stages": flagged_stages,
+            "top_hypotheses": top_hypotheses,
+        },
+        "sql_execution": full_output.get("sql_execution", {}),
+        "analyst_summary": full_output.get("analyst_summary", ""),
+    }
+
+    if include_sql_templates:
+        compact["analysis_sql"] = full_output.get("analysis_sql", {})
+    return compact
 
 def _collect_custom_queries(payload: dict[str, Any]) -> list[tuple[str, str]]:
     queries: list[tuple[str, str]] = []
@@ -129,24 +149,81 @@ def _compact_response(full_output: dict[str, object], *, include_sql_templates: 
     flagged_stages = [item for item in stage_rows if isinstance(item, dict) and item.get("flagged")]
 
     hypotheses = full_output.get("hypotheses") if isinstance(full_output.get("hypotheses"), list) else []
-    top_hypotheses = hypotheses[:3]
+    top_hypotheses = [
+        {
+            "hypothesis": str(item.get("hypothesis", "")),
+            "confidence": item.get("confidence"),
+        }
+        for item in hypotheses[:3]
+        if isinstance(item, dict)
+    ]
+
+    metadata = full_output.get("resolved_variable_metadata", {})
+    minimal_metadata = {
+        "variable_id": metadata.get("variable_id", ""),
+        "variable_name": metadata.get("variable_name", ""),
+        "description": metadata.get("description", ""),
+        "source_table": metadata.get("source_table", ""),
+        "segment": metadata.get("segment", ""),
+        "model_family": metadata.get("model_family", ""),
+    } if isinstance(metadata, dict) else {}
+
+    input_context = full_output.get("input_context", {})
+    minimal_context = {
+        "raw_user_query": input_context.get("raw_user_query", ""),
+        "resolved_variable_id": input_context.get("resolved_variable_id", ""),
+        "resolved_variable_name": input_context.get("resolved_variable_name", ""),
+        "alert_date": input_context.get("alert_date", ""),
+        "alert_type": input_context.get("alert_type", "unknown"),
+        "metric_view": input_context.get("metric_view", "unknown"),
+        "parse_confidence": input_context.get("parse_confidence", 0.0),
+    } if isinstance(input_context, dict) else {}
+
+    metric_decomposition = full_output.get("metric_decomposition", {})
+    include_decomp = False
+    if isinstance(metric_decomposition, dict):
+        for side in ("numerator", "denominator"):
+            part = metric_decomposition.get(side)
+            if isinstance(part, dict) and any(part.get(key) is not None for key in ("value", "baseline", "pct_change")):
+                include_decomp = True
+                break
+
+    sql_execution = full_output.get("sql_execution", {})
+    query_results = sql_execution.get("query_results", []) if isinstance(sql_execution, dict) else []
+    summarized_results = []
+    for item in query_results:
+        if isinstance(item, dict):
+            summarized_results.append(
+                {
+                    "name": item.get("name", ""),
+                    "status": item.get("status", ""),
+                    "row_count": item.get("row_count", 0),
+                    "error": item.get("error", ""),
+                }
+            )
 
     compact = {
         "tool": full_output.get("tool", "rca_analysis"),
         "status": full_output.get("status", "success"),
-        "input_context": full_output.get("input_context", {}),
-        "resolved_variable_metadata": full_output.get("resolved_variable_metadata", {}),
+        "input_context": minimal_context,
+        "resolved_variable_metadata": minimal_metadata,
         "analysis_window": full_output.get("analysis_window", {}),
         "baseline_window": full_output.get("baseline_window", {}),
         "alert_summary": full_output.get("alert_summary", {}),
-        "metric_decomposition": full_output.get("metric_decomposition", {}),
         "key_findings": {
             "flagged_stages": flagged_stages,
             "top_hypotheses": top_hypotheses,
         },
-        "sql_execution": full_output.get("sql_execution", {}),
+        "sql_execution": {
+            "execute_sql": bool(sql_execution.get("execute_sql", False)) if isinstance(sql_execution, dict) else False,
+            "execute_generated_sql": bool(sql_execution.get("execute_generated_sql", False)) if isinstance(sql_execution, dict) else False,
+            "query_results": summarized_results,
+        },
         "analyst_summary": full_output.get("analyst_summary", ""),
     }
+
+    if include_decomp:
+        compact["metric_decomposition"] = metric_decomposition
 
     if include_sql_templates:
         compact["analysis_sql"] = full_output.get("analysis_sql", {})
@@ -274,6 +351,16 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
     if response_mode == "full":
         if not include_sql_templates and "analysis_sql" in full_output:
             del full_output["analysis_sql"]
+        stage_rows = full_output.get("stage_diagnostics")
+        if isinstance(stage_rows, list) and stage_rows:
+            if all(
+                isinstance(item, dict)
+                and item.get("current_count") is None
+                and item.get("baseline_count") is None
+                and item.get("pct_change") is None
+                for item in stage_rows
+            ):
+                full_output["stage_diagnostics"] = []
         return full_output
 
     return _compact_response(full_output, include_sql_templates=include_sql_templates)
