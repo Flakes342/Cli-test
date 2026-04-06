@@ -36,6 +36,7 @@ def main() -> None:
         print(f"- default_dataset_id: {resolved.default_dataset_id}")
         print(f"- default_folder_nm: {resolved.default_folder_nm}")
         print(f"- spark_python: {resolved.spark_python}")
+        print(f"- variable_catalog_path: {resolved.variable_catalog_path}")
         return
 
     from amex_ai_agent.agent import run_app
