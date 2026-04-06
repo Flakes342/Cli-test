@@ -26,6 +26,7 @@ Instead, it works like this:
    - default BigQuery dataset
    - default output folder
    - Spark Python path
+   - variable catalog CSV path
 3. The chat app starts.
 4. When you enter a request, Sally:
    - stores the request in memory
@@ -35,16 +36,17 @@ Instead, it works like this:
    - executes any tool calls
    - saves tool outputs to memory
    - loops until the model returns `DONE` or the max loop count is reached
-5. Tool execution currently centers on `data_prep`, especially the RNN data-prep pipeline.
+5. Tool execution currently centers on `data_prep`, plus metadata-driven tools (`variable_lookup` and `rca_analysis`) for CDIT alert triage.
 6. Results are shown in the terminal and also logged to disk.
 
-You can think of the repo as five layers:
+You can think of the repo as six layers:
 
 1. **Launcher / startup layer** — `sally`, `cli.py`, `startup.py`, `config.py`
 2. **Chat/orchestration layer** — `chat.py`, `reasoning_graph.py`, `planner.py`, `parser.py`, `llm_gateway.py`, `memory.py`
 3. **Tool execution layer** — `executor.py`, `tools/*`
-4. **Pipeline layer** — `pipelines/rnn_data_prep/*`
-5. **Embedded domain code** — `rnn_data_prep/src`, `rnn_data_prep/utils`, `rnn_data_prep/sqlQ`
+4. **Catalog layer** — `variable_catalog.py`
+5. **Pipeline layer** — `pipelines/rnn_data_prep/*`
+6. **Embedded domain code** — `rnn_data_prep/src`, `rnn_data_prep/utils`, `rnn_data_prep/sqlQ`
 
 ---
 
@@ -62,7 +64,7 @@ You can think of the repo as five layers:
 
 - `config.yaml`
   - Saved runtime config.
-  - Holds agent name, execution mode, and startup defaults.
+  - Holds agent name, execution mode, startup defaults, and `variable_catalog_path`.
 
 - `environment.yml`
   - Conda/Mamba environment definition.
@@ -76,7 +78,7 @@ You can think of the repo as five layers:
 ### Main package: `amex_ai_agent/`
 
 - `agent.py` — top-level app startup
-- `chat.py` — interactive CLI app
+- `chat.py` — interactive CLI app, including direct `/var` and `/vars` shortcuts
 - `cli.py` — subcommand CLI wrapper
 - `config.py` — config dataclass + loader/saver
 - `executor.py` — tool registry and dispatcher
@@ -87,6 +89,8 @@ You can think of the repo as five layers:
 - `planner.py` — builds prompts from task + memory + routing
 - `reasoning_graph.py` — bounded route → reason → tools loop
 - `startup.py` — interactive bootstrap, config persistence, env var setup
+- `variable_catalog.py` — CSV-backed variable metadata loader, normalizer, and search helper
+- `rca/` — reusable CDIT variable-alert RCA components (parser, normalizer, resolver, SQL builders, analysis logic)
 
 ### UI package: `amex_ai_agent/ui/`
 
@@ -100,6 +104,8 @@ Currently active or core:
 - `data_prep.py`
 - `model_score.py`
 - `metrics.py`
+- `variable_lookup.py`
+- `rca_analysis.py`
 - `base.py`
 
 Other existing but not currently wired into the active tool registry:
@@ -132,6 +138,16 @@ Other existing but not currently wired into the active tool registry:
 - `templates.py`
 - `tools/*.md`
 - `experimental/*.md`
+
+### Tests
+
+- `tests/test_variable_catalog.py`
+- `tests/test_variable_lookup_tool.py`
+- `tests/test_alert_query_parser.py`
+- `tests/test_variable_metadata_resolver.py`
+- `tests/test_rca_sql_templates.py`
+- `tests/test_rca_analysis_logic.py`
+- `tests/test_rca_analysis_tool.py`
 
 ---
 
@@ -203,6 +219,56 @@ run_pipeline(...)
 
 ---
 
+## 3.4 Variable catalog flow
+
+When the model or analyst needs variable definitions:
+
+```text
+variable_lookup.run(...)
+  -> load configured CSV from variable_catalog_path
+  -> normalize headers/values
+  -> exact lookup by code OR
+  -> filtered list by model/domain/table OR
+  -> fuzzy search over code/full name/description
+  -> return structured JSON result
+```
+
+The direct chat commands `/var <code>`, `/vars model <model>`, and `/vars domain <domain>` reuse the same catalog layer without invoking the LLM.
+
+---
+
+
+## 3.5 CDIT variable-alert RCA flow
+
+When an analyst asks for an RCA like "RDMC3048 lower-limit alert":
+
+```text
+rca_analysis.run(...)
+  -> parse natural-language alert request (variable/date/type/metric)
+  -> resolve variable metadata from variable_catalog_path
+  -> normalize analysis/baseline windows
+  -> construct stage-funnel + driver SQL templates
+  -> compute structured first-pass RCA output
+     (alert summary, decomposition, stage diagnostics, DQ checks, hypotheses, analyst summary)
+```
+
+Implementation modules:
+
+- `rca/alert_query_parser.py`
+- `rca/variable_metadata_resolver.py`
+- `rca/alert_context_normalizer.py`
+- `rca/sql_templates.py`
+- `rca/analysis.py`
+
+The design keeps parsing, metadata resolution, SQL generation, and findings logic independent so new variables and additional RCA checks can be added without rewriting the tool wrapper.
+
+`rca_analysis` also supports optional SQL execution for data gathering:
+- `execute_sql=true` with `query` or `queries` executes ad-hoc SQL.
+- `execute_generated_sql=true` executes the generated stage-funnel and driver SQL templates.
+- Query execution follows the repo logger pattern and calls `bq query --nouse_legacy_sql --format=json`, returning rows in the tool output.
+
+---
+
 ## 4. Root-level files
 
 ## 4.1 `agent.py`
@@ -252,10 +318,12 @@ Fields currently used:
 - `default_dataset_id`
 - `default_folder_nm`
 - `spark_python`
+- `variable_catalog_path`
 
 Important behavior:
 - `default_project_id` / `default_dataset_id` are especially important for data prep
 - `spark_python` is reused to set all Spark-related Python env vars
+- `variable_catalog_path` points to the CSV used by direct variable commands and the `variable_lookup` tool
 
 ## 4.4 `environment.yml`
 
@@ -330,6 +398,7 @@ Fields:
 - `default_dataset_id`
 - `default_folder_nm`
 - `spark_python`
+- `variable_catalog_path`
 
 ### `ConfigLoader`
 Handles reading and writing `config.yaml`.
