@@ -97,6 +97,26 @@ def _resolve_variable_metadata(
         return resolved, [metadata_to_dict(item) for item in candidates]
     return None, [metadata_to_dict(item) for item in candidates]
 
+    compact = {
+        "tool": full_output.get("tool", "rca_analysis"),
+        "status": full_output.get("status", "success"),
+        "input_context": full_output.get("input_context", {}),
+        "resolved_variable_metadata": full_output.get("resolved_variable_metadata", {}),
+        "analysis_window": full_output.get("analysis_window", {}),
+        "baseline_window": full_output.get("baseline_window", {}),
+        "alert_summary": full_output.get("alert_summary", {}),
+        "metric_decomposition": full_output.get("metric_decomposition", {}),
+        "key_findings": {
+            "flagged_stages": flagged_stages,
+            "top_hypotheses": top_hypotheses,
+        },
+        "sql_execution": full_output.get("sql_execution", {}),
+        "analyst_summary": full_output.get("analyst_summary", ""),
+    }
+
+    if include_sql_templates:
+        compact["analysis_sql"] = full_output.get("analysis_sql", {})
+    return compact
 
 def _collect_custom_queries(payload: dict[str, Any]) -> list[tuple[str, str]]:
     queries: list[tuple[str, str]] = []
