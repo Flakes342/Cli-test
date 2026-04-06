@@ -16,10 +16,9 @@ No tool outputs yet.
 AVAILABLE TOOLS:
 data_prep(dataset_path_or_instruction)
 rca_analysis(transcript_or_notes)
-case_review(case_json_or_notes)
 alert_rationalization(alert_csv_path_or_instruction)
 compute_metrics(model_scoring_csv_path)
-generate_ppt(summary_text)
+variable_lookup(json_query)
 
 Return JSON with this schema:
 {{
@@ -125,10 +124,9 @@ LATEST TOOL OUTPUTS:
 Available tool names:
 - data_prep
 - rca_analysis
-- case_review
 - alert_rationalization
 - compute_metrics
-- generate_ppt
+- variable_lookup
 
 Instructions:
 - Think stepwise and choose only necessary tools.

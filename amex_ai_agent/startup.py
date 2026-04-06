@@ -32,6 +32,11 @@ class StartupManager:
             default=resolved.spark_python,
             required=False,
         ) or resolved.spark_python
+        resolved.variable_catalog_path = self._prompt(
+            "Variable catalog CSV path",
+            default=resolved.variable_catalog_path,
+            required=False,
+        ) or resolved.variable_catalog_path
 
         self._apply_python_env(resolved.spark_python)
         self.loader.save(resolved)
