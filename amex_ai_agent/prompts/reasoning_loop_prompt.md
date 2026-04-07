@@ -27,11 +27,9 @@ Use only these exact tool names:
 
 * **data_prep(instruction_or_json)**
 * **model_score(instruction_or_json)**
-* **rca_analysis(transcript_or_notes)**
-* **case_review(case_json_or_notes)**
 * **alert_rationalization(alert_csv_path_or_instruction)**
 * **compute_metrics(model_scoring_csv_path)**
-* **generate_ppt(summary_text)**
+* **variable_lookup(instruction_or_json)**
 
 ---
 
@@ -41,7 +39,8 @@ Use only these exact tool names:
 2. Plan the minimum next steps.
 3. Emit tool calls only when execution is required.
 4. Avoid repeating already-completed work.
-5. If enough evidence exists, finalize with a direct analyst-facing answer.
+5. Use `variable_lookup` when the analyst needs variable definitions or catalog discovery.
+6. If enough evidence exists, finalize with a direct analyst-facing answer.
 
 ---
 
