@@ -55,12 +55,18 @@ def _resolve_variable(payload: dict[str, Any], raw_text: str, context: ToolExecu
     return None, reference
 
 
-def _build_default_sql(*, table_name: str, start_date: str, end_date: str, variable_id: str) -> str:
+def _build_fallback_sql(*, table_name: str, start_date: str, end_date: str, metric_col: str, alert_type: str) -> str:
+    direction_expr = "LAG(avg_metric) OVER (ORDER BY trans_dt)"
     return (
-        f"SELECT trans_dt, COUNT(*) AS row_count, AVG({variable_id}) AS avg_value "
-        f"FROM {table_name} "
-        f"WHERE trans_dt BETWEEN '{start_date}' AND '{end_date}' "
-        "GROUP BY trans_dt ORDER BY trans_dt"
+        "WITH daily AS ("
+        f" SELECT trans_dt, COUNT(*) AS txn_cnt, AVG({metric_col}) AS avg_metric"
+        f" FROM {table_name}"
+        f" WHERE trans_dt BETWEEN '{start_date}' AND '{end_date}'"
+        " GROUP BY trans_dt"
+        ") "
+        "SELECT trans_dt, txn_cnt, avg_metric, "
+        f"avg_metric - {direction_expr} AS metric_delta "
+        "FROM daily ORDER BY trans_dt"
     )
 
 
@@ -88,33 +94,30 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
     end_date = str(payload.get("end_date") or alert_date)
 
     table_name = str(payload.get("alert_table") or (resolved_variable or {}).get("source_table") or "").strip()
-    user_query_sql = str(payload.get("query", "") or "").strip()
+    llm_sql = str(payload.get("sql_query") or payload.get("query") or "").strip()
 
-    generated_sql = ""
+    fallback_sql = ""
     if table_name and sql_metric_name:
-        generated_sql = _build_default_sql(table_name=table_name, start_date=start_date, end_date=end_date, variable_id=sql_metric_name)
+        fallback_sql = _build_fallback_sql(
+            table_name=table_name,
+            start_date=start_date,
+            end_date=end_date,
+            metric_col=sql_metric_name,
+            alert_type=str(payload.get("alert_type") or parsed.alert_type),
+        )
 
-    execute_sql = bool(payload.get("execute_sql", False) or user_query_sql)
+    chosen_sql = llm_sql or fallback_sql
+
+    execute_sql = bool(payload.get("execute_sql", False))
     query_results: list[dict[str, object]] = []
-    queries_to_run: list[tuple[str, str]] = []
-    if execute_sql:
-        if user_query_sql:
-            queries_to_run.append(("alert_rationalization_custom", user_query_sql))
-        elif generated_sql:
-            queries_to_run.append(("alert_rationalization_generated", generated_sql))
-
-        if queries_to_run:
-            context.report_progress("Running alert rationalization SQL...")
-            query_results = [result.to_dict() for result in run_bq_queries(queries_to_run, logger=context.logger or LOGGER)]
-
-    status = "success"
-    if not variable_id:
-        status = "needs_user_input"
+    if execute_sql and chosen_sql:
+        context.report_progress("Running alert rationalization SQL...")
+        query_results = [result.to_dict() for result in run_bq_queries([("alert_rationalization", chosen_sql)], logger=context.logger or LOGGER)]
 
     if not variable_id:
         return {
             "tool": "alert_rationalization",
-            "status": status,
+            "status": "needs_user_input",
             "message": "Variable is required for alert rationalization.",
             "workflow_hint": "Run variable_lookup first to resolve the variable_id, then rerun alert_rationalization.",
             "parsed_alert_context": {
@@ -127,7 +130,7 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
 
     return {
         "tool": "alert_rationalization",
-        "status": status,
+        "status": "success",
         "input_context": {
             "raw_user_query": parsed.raw_user_query,
             "variable_id": variable_id,
@@ -142,6 +145,7 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
             "execute_sql": execute_sql,
             "query_results": query_results,
         },
-        "generated_sql": generated_sql,
+        "sql_query": chosen_sql,
+        "sql_source": "llm_query" if llm_sql else "fallback_template",
         "workflow_hint": "For variable-specific alert rationalization, run variable_lookup first if variable_id is uncertain.",
     }

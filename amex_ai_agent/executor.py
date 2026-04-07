@@ -29,7 +29,6 @@ class ToolExecutor:
         "data_prep": "amex_ai_agent.tools.data_prep",
         "model_score": "amex_ai_agent.tools.model_score",
         "compute_metrics": "amex_ai_agent.tools.metrics",
-        "rca_analysis": "amex_ai_agent.tools.rca_analysis",
         "alert_rationalization": "amex_ai_agent.tools.alerts",
         "variable_lookup": "amex_ai_agent.tools.variable_lookup",
     }

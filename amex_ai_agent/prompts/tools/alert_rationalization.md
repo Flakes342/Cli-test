@@ -13,3 +13,8 @@ Behavior:
 - Resolves variable metadata from the configured catalog when available.
 - Builds default SQL from variable metadata + window.
 - Can run SQL via `bq query` when `execute_sql=true`.
+
+
+Important:
+- The planner/LLM should write a concrete `sql_query` (or `query`) whenever possible, following alert template logic and variable metadata.
+- `alert_rationalization` only uses generated fallback SQL when no SQL query is supplied.
