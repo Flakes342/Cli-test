@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import csv
-from dataclasses import asdict
+from dataclasses import asdict, fields
 from pathlib import Path
 from typing import Iterable
 
@@ -101,22 +101,24 @@ def record_from_row(row: dict[str, object]) -> VariableMetadata:
     aliases = _split_list(normalized.get("aliases", ""))
     tags = _split_list(normalized.get("tags", ""))
 
-    return VariableMetadata(
-        variable_id=normalized.get("variable_id", ""),
-        variable_name=normalized.get("variable_name", ""),
-        description=normalized.get("description", ""),
-        variable_type=normalized.get("variable_type", ""),
-        default_value=normalized.get("default_value", ""),
-        source_table=normalized.get("source_table", ""),
-        segment=normalized.get("segment", ""),
-        model_family=normalized.get("model_family", ""),
-        use_case=normalized.get("use_case", ""),
-        numerator_hint=normalized.get("numerator_hint", ""),
-        denominator_hint=normalized.get("denominator_hint", ""),
-        owner_team=normalized.get("owner_team", ""),
-        aliases=aliases,
-        tags=tags,
-    )
+    candidate_values: dict[str, object] = {
+        "variable_id": normalized.get("variable_id", ""),
+        "variable_name": normalized.get("variable_name", ""),
+        "description": normalized.get("description", ""),
+        "variable_type": normalized.get("variable_type", ""),
+        "default_value": normalized.get("default_value", ""),
+        "source_table": normalized.get("source_table", ""),
+        "segment": normalized.get("segment", ""),
+        "model_family": normalized.get("model_family", ""),
+        "use_case": normalized.get("use_case", ""),
+        "numerator_hint": normalized.get("numerator_hint", ""),
+        "denominator_hint": normalized.get("denominator_hint", ""),
+        "owner_team": normalized.get("owner_team", ""),
+        "aliases": aliases,
+        "tags": tags,
+    }
+    valid_fields = {item.name for item in fields(VariableMetadata)}
+    return VariableMetadata(**{key: value for key, value in candidate_values.items() if key in valid_fields})
 
 
 def metadata_to_dict(metadata: VariableMetadata) -> dict[str, object]:
