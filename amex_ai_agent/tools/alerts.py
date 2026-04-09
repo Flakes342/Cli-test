@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from amex_ai_agent.rca.alert_query_parser import parse_alert_query
-from amex_ai_agent.rca.bq_executor import run_bq_queries
+from amex_ai_agent.rca.bq_executor import run_bq_query
 from amex_ai_agent.rca.variable_metadata_resolver import VariableMetadataResolver, metadata_to_dict
 from amex_ai_agent.tools.base import ToolExecutionContext
 
@@ -78,6 +78,24 @@ def _sanitize_table_segment(value: str) -> str:
     if cleaned[0].isdigit():
         cleaned = f"t_{cleaned}"
     return cleaned
+
+
+def _normalize_dataset_id(value: str, *, project_id: str) -> str:
+    raw = (value or "").strip().replace("`", "")
+    if not raw:
+        return ""
+
+    # Handle fully-qualified forms passed by mistake:
+    # - project.dataset
+    # - project:dataset
+    # - project.dataset.table (take dataset token)
+    normalized = raw.replace(":", ".")
+    parts = [part for part in normalized.split(".") if part]
+    if len(parts) >= 2 and parts[0] == project_id:
+        return parts[1]
+    if len(parts) == 1:
+        return parts[0]
+    return raw
 
 
 def _template_query_names(variable_type: str, default_value: str) -> list[str]:
@@ -217,6 +235,7 @@ def _build_destination_tables(
         or context.defaults.get("default_dataset_id")
         or ""
     ).strip()
+    dataset_id = _normalize_dataset_id(dataset_id, project_id=project_id)
     folder_nm = str(
         payload.get("folder_nm")
         or context.defaults.get("folder_nm")
@@ -341,14 +360,16 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
                 },
             }
         context.report_progress("Running default alert-rationalization SQL query set...")
-        query_results = [
-            result.to_dict()
-            for result in run_bq_queries(
-                default_queries,
+        total = len(default_queries)
+        for index, (name, sql) in enumerate(default_queries, start=1):
+            context.report_progress(f"Running query {index}/{total}: {name}")
+            result = run_bq_query(
+                sql,
+                name=name,
                 logger=context.logger or LOGGER,
-                destinations=destination_tables,
+                destination_table=destination_tables.get(name, ""),
             )
-        ]
+            query_results.append(result.to_dict())
         context.report_progress("Default alert-rationalization SQL query set finished.")
 
     summary, needs_llm_followup = _build_summary(

@@ -61,26 +61,26 @@ def test_alert_rationalization_uses_default_aware_numerical_stats_query(tmp_path
 
 def test_alert_rationalization_executes_sql_when_requested(monkeypatch, tmp_path: Path) -> None:
     catalog = _write_catalog(tmp_path)
+    calls: list[tuple[str, str]] = []
 
-    def _fake_run_bq_queries(queries, logger=None, destinations=None):
+    def _fake_run_bq_query(sql, *, name="query", logger=None, destination_table=""):
+        calls.append((name, destination_table))
+
         class _Result:
-            def __init__(self, name: str):
-                self.name = name
-
             def to_dict(self):
                 return {
-                    "name": self.name,
+                    "name": name,
                     "status": "success",
                     "row_count": 7,
                     "rows": [{"x": 1}],
                     "duration_seconds": 0.01,
                     "error": "",
-                    "destination_table": (destinations or {}).get(self.name, ""),
+                    "destination_table": destination_table,
                 }
 
-        return [_Result(name) for name, _ in queries]
+        return _Result()
 
-    monkeypatch.setattr(alert_tool, "run_bq_queries", _fake_run_bq_queries)
+    monkeypatch.setattr(alert_tool, "run_bq_query", _fake_run_bq_query)
 
     result = run(
         json.dumps({"variable_id": "RDMC3048", "alert_date": "2026-03-22", "execute_sql": True}),
@@ -92,6 +92,7 @@ def test_alert_rationalization_executes_sql_when_requested(monkeypatch, tmp_path
     assert result["sql_execution"]["query_results"][0]["row_count"] == 7
     assert result["sql_execution"]["destination_tables"]
     assert result["sql_execution"]["persist_query_tables"] is True
+    assert len(calls) == 4
     assert result["needs_llm_followup"] is False
 
 
@@ -118,3 +119,44 @@ def test_alert_rationalization_requires_dataset_for_table_persistence(tmp_path: 
 
     assert result["status"] == "needs_user_input"
     assert "project_id and dataset_id are required" in result["message"]
+
+
+def test_alert_rationalization_normalizes_fully_qualified_dataset_id(monkeypatch, tmp_path: Path) -> None:
+    catalog = _write_catalog(tmp_path)
+    captured_destinations: list[str] = []
+    context = ToolExecutionContext(
+        logger=logging.getLogger("test"),
+        defaults={
+            "variable_catalog_path": str(catalog),
+            "default_project_id": "prj-p-ai-fraud",
+            "default_dataset_id": "prj-p-ai-fraud.atanw9",
+        },
+    )
+
+    def _fake_run_bq_query(sql, *, name="query", logger=None, destination_table=""):
+        captured_destinations.append(destination_table)
+
+        class _Result:
+            def to_dict(self):
+                return {
+                    "name": name,
+                    "status": "success",
+                    "row_count": 1,
+                    "rows": [{"x": 1}],
+                    "duration_seconds": 0.01,
+                    "error": "",
+                    "destination_table": destination_table,
+                }
+
+        return _Result()
+
+    monkeypatch.setattr(alert_tool, "run_bq_query", _fake_run_bq_query)
+
+    result = run(
+        json.dumps({"variable_id": "RDMC3048", "alert_date": "2026-03-22", "execute_sql": True}),
+        context=context,
+    )
+
+    assert result["status"] == "success"
+    assert captured_destinations
+    assert captured_destinations[0].startswith("prj-p-ai-fraud.atanw9.")
