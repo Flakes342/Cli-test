@@ -61,6 +61,15 @@ def _sanitize_identifier(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_]", "", (value or "").strip())
 
 
+def _normalize_table_reference(value: str) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    # Catalog values may already contain backticks (for project-only or full path quoting).
+    # Templates quote the whole table identifier, so keep a plain dotted path here.
+    return raw.replace("`", "")
+
+
 def _template_query_names(variable_type: str, default_value: str) -> list[str]:
     normalized = (variable_type or "").strip().lower()
     is_categorical = normalized.startswith("cat")
@@ -88,7 +97,7 @@ def _build_queries(
 
     replacement_map = {
         "var": safe_var,
-        "var_table": variable_table,
+        "var_table": _normalize_table_reference(variable_table),
         "alert_dt": alert_date,
         "default_value": str(default_value or "0"),
         "alerted_value": str(alerted_value or "").strip(),
@@ -212,6 +221,15 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
             "workflow_hint": "Run variable_lookup first to resolve the variable_id, then rerun alert_rationalization.",
         }
 
+    if not _sanitize_identifier(variable_name):
+        return {
+            "tool": "alert_rationalization",
+            "status": "needs_user_input",
+            "message": "Variable name is empty/invalid for SQL template rendering.",
+            "workflow_hint": "Provide a valid variable_name or ensure Full Name exists in catalog.",
+            "input_context": {"variable_id": variable_id, "variable_name": variable_name},
+        }
+
     if not variable_table:
         return {
             "tool": "alert_rationalization",
@@ -256,6 +274,7 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
     if execute_sql:
         context.report_progress("Running default alert-rationalization SQL query set...")
         query_results = [result.to_dict() for result in run_bq_queries(default_queries, logger=context.logger or LOGGER)]
+        context.report_progress("Default alert-rationalization SQL query set finished.")
 
     summary, needs_llm_followup = _build_summary(
         variable_id=variable_id,
