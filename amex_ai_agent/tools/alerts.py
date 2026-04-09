@@ -70,6 +70,16 @@ def _normalize_table_reference(value: str) -> str:
     return raw.replace("`", "")
 
 
+def _sanitize_table_segment(value: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9_]", "_", (value or "").strip().lower())
+    cleaned = re.sub(r"_+", "_", cleaned).strip("_")
+    if not cleaned:
+        return "alert"
+    if cleaned[0].isdigit():
+        cleaned = f"t_{cleaned}"
+    return cleaned
+
+
 def _template_query_names(variable_type: str, default_value: str) -> list[str]:
     normalized = (variable_type or "").strip().lower()
     is_categorical = normalized.startswith("cat")
@@ -187,6 +197,46 @@ def _build_followup_prompt(
     )
 
 
+def _build_destination_tables(
+    *,
+    query_names: list[str],
+    variable_id: str,
+    alert_date: str,
+    context: ToolExecutionContext,
+    payload: dict[str, Any],
+) -> dict[str, str]:
+    project_id = str(
+        payload.get("project_id")
+        or context.defaults.get("project_id")
+        or context.defaults.get("default_project_id")
+        or ""
+    ).strip()
+    dataset_id = str(
+        payload.get("dataset_id")
+        or context.defaults.get("dataset_id")
+        or context.defaults.get("default_dataset_id")
+        or ""
+    ).strip()
+    folder_nm = str(
+        payload.get("folder_nm")
+        or context.defaults.get("folder_nm")
+        or context.defaults.get("default_folder_nm")
+        or "alert_rationalization"
+    ).strip()
+    if not project_id or not dataset_id:
+        return {}
+
+    safe_var = _sanitize_table_segment(variable_id)
+    safe_date = _sanitize_table_segment(alert_date.replace("-", ""))
+    safe_prefix = _sanitize_table_segment(folder_nm)
+    destinations: dict[str, str] = {}
+    for query_name in query_names:
+        safe_query = _sanitize_table_segment(query_name)
+        table_name = f"{safe_prefix}_alert_{safe_var}_{safe_date}_{safe_query}"
+        destinations[query_name] = f"{project_id}.{dataset_id}.{table_name}"
+    return destinations
+
+
 def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
     context.report_progress("Parsing alert rationalization request...")
     payload, raw_text = _parse_argument(argument)
@@ -271,9 +321,34 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
 
     execute_sql = bool(payload.get("execute_sql", False))
     query_results: list[dict[str, object]] = []
+    destination_tables = _build_destination_tables(
+        query_names=[name for name, _ in default_queries],
+        variable_id=variable_id,
+        alert_date=alert_date,
+        context=context,
+        payload=payload,
+    )
     if execute_sql:
+        if not destination_tables:
+            return {
+                "tool": "alert_rationalization",
+                "status": "needs_user_input",
+                "message": "project_id and dataset_id are required to persist alert query outputs as BigQuery tables.",
+                "workflow_hint": "Provide project_id/dataset_id (or set default_project_id/default_dataset_id in config) and rerun.",
+                "input_context": {
+                    "variable_id": variable_id,
+                    "alert_date": alert_date,
+                },
+            }
         context.report_progress("Running default alert-rationalization SQL query set...")
-        query_results = [result.to_dict() for result in run_bq_queries(default_queries, logger=context.logger or LOGGER)]
+        query_results = [
+            result.to_dict()
+            for result in run_bq_queries(
+                default_queries,
+                logger=context.logger or LOGGER,
+                destinations=destination_tables,
+            )
+        ]
         context.report_progress("Default alert-rationalization SQL query set finished.")
 
     summary, needs_llm_followup = _build_summary(
@@ -301,6 +376,8 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
         "resolved_variable_metadata": resolved_variable or {},
         "sql_execution": {
             "execute_sql": execute_sql,
+            "persist_query_tables": bool(destination_tables),
+            "destination_tables": destination_tables,
             "query_set": [
                 {"name": name, "sql": sql}
                 for name, sql in default_queries

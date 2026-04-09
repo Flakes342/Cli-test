@@ -16,7 +16,15 @@ AAVMDLCD,aav_model_rslt_cd,desc,Categorical,@,axp-lumi.dw.wwcas_auth_analytics_0
 
 
 def _context(catalog_path: Path) -> ToolExecutionContext:
-    return ToolExecutionContext(logger=logging.getLogger("test"), defaults={"variable_catalog_path": str(catalog_path)})
+    return ToolExecutionContext(
+        logger=logging.getLogger("test"),
+        defaults={
+            "variable_catalog_path": str(catalog_path),
+            "default_project_id": "prj",
+            "default_dataset_id": "ds",
+            "default_folder_nm": "alerts",
+        },
+    )
 
 
 def _write_catalog(tmp_path: Path) -> Path:
@@ -54,13 +62,21 @@ def test_alert_rationalization_uses_default_aware_numerical_stats_query(tmp_path
 def test_alert_rationalization_executes_sql_when_requested(monkeypatch, tmp_path: Path) -> None:
     catalog = _write_catalog(tmp_path)
 
-    def _fake_run_bq_queries(queries, logger=None):
+    def _fake_run_bq_queries(queries, logger=None, destinations=None):
         class _Result:
             def __init__(self, name: str):
                 self.name = name
 
             def to_dict(self):
-                return {"name": self.name, "status": "success", "row_count": 7, "rows": [{"x": 1}], "duration_seconds": 0.01, "error": ""}
+                return {
+                    "name": self.name,
+                    "status": "success",
+                    "row_count": 7,
+                    "rows": [{"x": 1}],
+                    "duration_seconds": 0.01,
+                    "error": "",
+                    "destination_table": (destinations or {}).get(self.name, ""),
+                }
 
         return [_Result(name) for name, _ in queries]
 
@@ -74,6 +90,8 @@ def test_alert_rationalization_executes_sql_when_requested(monkeypatch, tmp_path
     assert result["status"] == "success"
     assert len(result["sql_execution"]["query_results"]) == 4
     assert result["sql_execution"]["query_results"][0]["row_count"] == 7
+    assert result["sql_execution"]["destination_tables"]
+    assert result["sql_execution"]["persist_query_tables"] is True
     assert result["needs_llm_followup"] is False
 
 
@@ -87,3 +105,16 @@ def test_alert_rationalization_requires_valid_variable_name(tmp_path: Path) -> N
 
     assert result["status"] == "needs_user_input"
     assert "Variable name is empty/invalid" in result["message"]
+
+
+def test_alert_rationalization_requires_dataset_for_table_persistence(tmp_path: Path) -> None:
+    catalog = _write_catalog(tmp_path)
+    context = ToolExecutionContext(logger=logging.getLogger("test"), defaults={"variable_catalog_path": str(catalog)})
+
+    result = run(
+        json.dumps({"variable_id": "RDMC3048", "alert_date": "2026-03-22", "execute_sql": True}),
+        context=context,
+    )
+
+    assert result["status"] == "needs_user_input"
+    assert "project_id and dataset_id are required" in result["message"]

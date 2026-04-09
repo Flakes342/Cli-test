@@ -74,6 +74,17 @@ Enabled tools:
 - `variable_lookup`
 - `alert_rationalization`
 
+### `alert_rationalization` output tables
+
+When `execute_sql=true`, `alert_rationalization` persists each default query output
+to BigQuery destination tables (similar to the RNN data-prep pattern), and returns
+those table names in `sql_execution.destination_tables`.
+
+To enable table persistence, provide:
+
+- `project_id` + `dataset_id` in the tool payload, **or**
+- `default_project_id` + `default_dataset_id` in `config.yaml`.
+
 `data_prep` supports these model names:
 
 - `rnn` — implemented

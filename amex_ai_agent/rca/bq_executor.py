@@ -20,6 +20,7 @@ class QueryExecutionResult:
     rows: list[dict[str, object]]
     duration_seconds: float
     error: str = ""
+    destination_table: str = ""
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -29,21 +30,41 @@ class QueryExecutionResult:
             "rows": self.rows,
             "duration_seconds": round(self.duration_seconds, 3),
             "error": self.error,
+            "destination_table": self.destination_table,
         }
 
 
-def run_bq_query(sql: str, *, name: str = "query", logger: logging.Logger | None = None) -> QueryExecutionResult:
+def run_bq_query(
+    sql: str,
+    *,
+    name: str = "query",
+    logger: logging.Logger | None = None,
+    destination_table: str = "",
+) -> QueryExecutionResult:
     run_logger = logger or LOGGER
     query = (sql or "").strip()
     if not query:
-        return QueryExecutionResult(name=name, status="invalid_input", row_count=0, rows=[], duration_seconds=0.0, error="Empty SQL query.")
+        return QueryExecutionResult(
+            name=name,
+            status="invalid_input",
+            row_count=0,
+            rows=[],
+            duration_seconds=0.0,
+            error="Empty SQL query.",
+            destination_table=destination_table,
+        )
 
     run_logger.info("Starting bq query execution. name=%s", name)
     start_time = time.time()
     last_log = start_time
 
+    args = ["bq", "query", "--nouse_legacy_sql", "--format=json"]
+    if destination_table:
+        args.extend([f"--destination_table={destination_table}", "--replace=true"])
+    args.append(query)
+
     process = subprocess.Popen(
-        ["bq", "query", "--nouse_legacy_sql", "--format=json", query],
+        args,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -69,6 +90,7 @@ def run_bq_query(sql: str, *, name: str = "query", logger: logging.Logger | None
             rows=[],
             duration_seconds=duration,
             error=message,
+            destination_table=destination_table,
         )
 
     rows = _safe_rows(stdout)
@@ -79,13 +101,27 @@ def run_bq_query(sql: str, *, name: str = "query", logger: logging.Logger | None
         row_count=len(rows),
         rows=rows,
         duration_seconds=duration,
+        destination_table=destination_table,
     )
 
 
-def run_bq_queries(queries: list[tuple[str, str]], *, logger: logging.Logger | None = None) -> list[QueryExecutionResult]:
+def run_bq_queries(
+    queries: list[tuple[str, str]],
+    *,
+    logger: logging.Logger | None = None,
+    destinations: dict[str, str] | None = None,
+) -> list[QueryExecutionResult]:
     results: list[QueryExecutionResult] = []
+    destination_map = destinations or {}
     for name, sql in queries:
-        results.append(run_bq_query(sql, name=name, logger=logger))
+        results.append(
+            run_bq_query(
+                sql,
+                name=name,
+                logger=logger,
+                destination_table=destination_map.get(name, ""),
+            )
+        )
     return results
 
 
