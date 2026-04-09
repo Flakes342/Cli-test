@@ -421,6 +421,7 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
         "sql_execution": {
             "execute_sql": execute_sql,
             "persist_query_tables": bool(destination_tables),
+            "destination_count": len(destination_tables),
             "destination_tables": destination_tables,
             "query_set": [
                 {"name": name, "sql": sql}
