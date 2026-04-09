@@ -236,20 +236,26 @@ def _build_destination_tables(
     context: ToolExecutionContext,
     payload: dict[str, Any],
 ) -> dict[str, str]:
-    project_id = str(
+    raw_project_id = str(
         payload.get("project_id")
         or context.defaults.get("project_id")
         or context.defaults.get("default_project_id")
         or ""
     ).strip()
-    project_id = _normalize_project_id(project_id)
-    dataset_id = str(
+    raw_dataset_id = str(
         payload.get("dataset_id")
         or context.defaults.get("dataset_id")
         or context.defaults.get("default_dataset_id")
         or ""
     ).strip()
-    dataset_id = _normalize_dataset_id(dataset_id, project_id=project_id)
+    dotted_dataset = raw_dataset_id.replace("`", "").replace(":", ".")
+    parts = [part for part in dotted_dataset.split(".") if part]
+    if len(parts) >= 2 and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,1023}", parts[1]):
+        project_id = parts[0]
+        dataset_id = parts[1]
+    else:
+        project_id = _normalize_project_id(raw_project_id)
+        dataset_id = _normalize_dataset_id(raw_dataset_id, project_id=project_id)
     folder_nm = str(
         payload.get("folder_nm")
         or context.defaults.get("folder_nm")

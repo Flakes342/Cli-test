@@ -160,3 +160,41 @@ def test_alert_rationalization_normalizes_fully_qualified_project_and_dataset(mo
     assert result["status"] == "success"
     assert captured_destinations
     assert captured_destinations[0].startswith("prj-p-ai-fraud.atanw9.")
+
+
+def test_alert_rationalization_uses_project_from_fully_qualified_dataset(monkeypatch, tmp_path: Path) -> None:
+    catalog = _write_catalog(tmp_path)
+    captured_destinations: list[str] = []
+    context = ToolExecutionContext(
+        logger=logging.getLogger("test"),
+        defaults={
+            "variable_catalog_path": str(catalog),
+            "default_dataset_id": "prj-p-ai-fraud.atanw9",
+        },
+    )
+
+    def _fake_run_bq_query(sql, *, name="query", logger=None, destination_table=""):
+        captured_destinations.append(destination_table)
+
+        class _Result:
+            def to_dict(self):
+                return {
+                    "name": name,
+                    "status": "success",
+                    "row_count": 1,
+                    "rows": [],
+                    "duration_seconds": 0.01,
+                    "error": "",
+                    "destination_table": destination_table,
+                }
+
+        return _Result()
+
+    monkeypatch.setattr(alert_tool, "run_bq_query", _fake_run_bq_query)
+    result = run(
+        json.dumps({"variable_id": "RDMC3048", "alert_date": "2026-03-22", "execute_sql": True}),
+        context=context,
+    )
+
+    assert result["status"] == "success"
+    assert captured_destinations[0].startswith("prj-p-ai-fraud.atanw9.")
