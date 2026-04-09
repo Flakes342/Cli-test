@@ -121,14 +121,14 @@ def test_alert_rationalization_requires_dataset_for_table_persistence(tmp_path: 
     assert "project_id and dataset_id are required" in result["message"]
 
 
-def test_alert_rationalization_normalizes_fully_qualified_dataset_id(monkeypatch, tmp_path: Path) -> None:
+def test_alert_rationalization_normalizes_fully_qualified_project_and_dataset(monkeypatch, tmp_path: Path) -> None:
     catalog = _write_catalog(tmp_path)
     captured_destinations: list[str] = []
     context = ToolExecutionContext(
         logger=logging.getLogger("test"),
         defaults={
             "variable_catalog_path": str(catalog),
-            "default_project_id": "prj-p-ai-fraud",
+            "default_project_id": "prj-p-ai-fraud.atanw9",
             "default_dataset_id": "prj-p-ai-fraud.atanw9",
         },
     )

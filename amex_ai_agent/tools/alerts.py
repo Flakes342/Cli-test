@@ -91,11 +91,24 @@ def _normalize_dataset_id(value: str, *, project_id: str) -> str:
     # - project.dataset.table (take dataset token)
     normalized = raw.replace(":", ".")
     parts = [part for part in normalized.split(".") if part]
-    if len(parts) >= 2 and parts[0] == project_id:
-        return parts[1]
     if len(parts) == 1:
         return parts[0]
+    if len(parts) >= 2 and parts[0] == project_id:
+        return parts[1]
+
+    for token in reversed(parts):
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,1023}", token):
+            return token
     return raw
+
+
+def _normalize_project_id(value: str) -> str:
+    raw = (value or "").strip().replace("`", "")
+    if not raw:
+        return ""
+    normalized = raw.replace(":", ".")
+    parts = [part for part in normalized.split(".") if part]
+    return parts[0] if parts else raw
 
 
 def _template_query_names(variable_type: str, default_value: str) -> list[str]:
@@ -229,6 +242,7 @@ def _build_destination_tables(
         or context.defaults.get("default_project_id")
         or ""
     ).strip()
+    project_id = _normalize_project_id(project_id)
     dataset_id = str(
         payload.get("dataset_id")
         or context.defaults.get("dataset_id")
@@ -369,7 +383,10 @@ def run(argument: str, *, context: ToolExecutionContext) -> dict[str, Any]:
                 logger=context.logger or LOGGER,
                 destination_table=destination_tables.get(name, ""),
             )
-            query_results.append(result.to_dict())
+            result_payload = result.to_dict()
+            query_results.append(result_payload)
+            status = str(result_payload.get("status", "unknown"))
+            context.report_progress(f"Completed query {index}/{total}: {name} ({status})")
         context.report_progress("Default alert-rationalization SQL query set finished.")
 
     summary, needs_llm_followup = _build_summary(
