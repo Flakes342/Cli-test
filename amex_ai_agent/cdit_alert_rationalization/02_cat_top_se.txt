@@ -1,0 +1,33 @@
+SELECT *
+FROM (
+  SELECT
+    x.*,
+    ROW_NUMBER() OVER (
+      PARTITION BY x.trans_dt
+      ORDER BY x.{var}_alerted_value_match_record_cnt DESC
+    ) AS row_num
+  FROM (
+    SELECT
+      a.trans_dt,
+      TRIM(a.se_number_15_dig) AS se10,
+      a.se_name,
+      COUNT(*) AS total_auth_records_cnt,
+      COUNT(
+        CASE
+          WHEN LOWER(TRIM(CAST(b.{var} AS STRING))) = LOWER(TRIM('{alerted_value}'))
+          THEN a.cas_pkey
+        END
+      ) AS {var}_alerted_value_match_record_cnt
+    FROM `axp-lumi.dw.wwcas_authorization` a
+    LEFT JOIN `{var_table}` b
+      ON a.cas_pkey = b.cas_pkey
+    WHERE
+      a.trans_dt BETWEEN DATE_SUB(DATE '{alert_dt}', INTERVAL 30 DAY)
+                      AND DATE_ADD(DATE '{alert_dt}', INTERVAL 5 DAY)
+      AND a.arm_proc_ind = '1'
+      AND a.country_cd IN ('AR','AT','AU','BE','CA','DE','ES','FI','FR','GB','HK','IT','JP','MX','NL','NO','NZ','SE','SG','TH','TW','US','X0','X2','X3','X4')
+    GROUP BY 1,2,3
+  ) x
+) y
+WHERE y.row_num <= 10
+ORDER BY y.trans_dt, y.row_num;

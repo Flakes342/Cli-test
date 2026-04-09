@@ -9,3 +9,4 @@ default_project_id:
 default_dataset_id:
 default_folder_nm: rnn_data_prep
 spark_python: /opt/conda/miniconda3/bin/python
+variable_catalog_path:

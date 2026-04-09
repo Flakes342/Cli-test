@@ -1,0 +1,15 @@
+SELECT
+  a.trans_dt,
+  a.trans_mode_in,
+  CONCAT('{var}_', COALESCE(CAST(b.{var} AS STRING), 'MISSING')) AS {var}_category,
+  COUNT(*) AS cnt
+FROM `axp-lumi.dw.wwcas_authorization` a
+LEFT JOIN `{var_table}` b
+  ON a.cas_pkey = b.cas_pkey
+WHERE
+  a.trans_dt BETWEEN DATE_SUB(DATE '{alert_dt}', INTERVAL 5 DAY)
+                  AND DATE_ADD(DATE '{alert_dt}', INTERVAL 5 DAY)
+  AND a.arm_proc_ind = '1'
+  AND a.country_cd IN ('AR','AT','AU','BE','CA','DE','ES','FI','FR','GB','HK','IT','JP','MX','NL','NO','NZ','SE','SG','TH','TW','US','X0','X2','X3','X4')
+GROUP BY 1, 2, 3
+ORDER BY 1, 2, 3;

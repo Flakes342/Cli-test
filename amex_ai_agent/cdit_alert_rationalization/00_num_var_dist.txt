@@ -1,0 +1,23 @@
+SELECT
+  a.trans_dt,
+  a.trans_mode_in,
+  COUNT(*) AS ttl_cnt,
+  COUNT(b.{var}) AS non_null_cnt,
+  COUNT(*) - COUNT(b.{var}) AS null_cnt,
+  MIN(b.{var}) AS min_val,
+  MAX(b.{var}) AS max_val,
+  AVG(b.{var}) AS avg_val,
+  STDDEV(b.{var}) AS stddev_val,
+  APPROX_QUANTILES(b.{var}, 4)[OFFSET(1)] AS p25,
+  APPROX_QUANTILES(b.{var}, 4)[OFFSET(2)] AS p50,
+  APPROX_QUANTILES(b.{var}, 4)[OFFSET(3)] AS p75
+FROM `axp-lumi.dw.wwcas_authorization` a
+LEFT JOIN `{var_table}` b
+  ON a.cas_pkey = b.cas_pkey
+WHERE
+  a.trans_dt BETWEEN DATE_SUB(DATE '{alert_dt}', INTERVAL 5 DAY)
+                  AND DATE_ADD(DATE '{alert_dt}', INTERVAL 5 DAY)
+  AND a.arm_proc_ind = '1'
+  AND a.country_cd IN ('AR','AT','AU','BE','CA','DE','ES','FI','FR','GB','HK','IT','JP','MX','NL','NO','NZ','SE','SG','TH','TW','US','X0','X2','X3','X4')
+GROUP BY 1, 2
+ORDER BY 1, 2;
